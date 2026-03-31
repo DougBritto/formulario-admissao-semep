@@ -1,0 +1,55 @@
+{
+  "grau_instrucao": [
+    "10 ANALFABETO",
+    "20 ATE 4ª SERIE INCOMPLETA (PRIMARIO INCOMPLETO)",
+    "25 COM 4ª SERIE COMPLETA DO 1º GRAU (PRIMARIO COMPLETO)",
+    "30 PRIMEIRO GRAU (GINASIO) INCOMPLETO",
+    "35 PRIMEIRO GRAU (GINASIO) COMPLETO",
+    "40 SEGUNDO GRAU (COLEGIAL) INCOMPLETO",
+    "45 SEGUNDO GRAU (COLEGIAL) COMPLETO",
+    "50 SUPERIOR INCOMPLETO",
+    "55 SUPERIOR COMPLETO",
+    "65 MESTRADO COMPLETO",
+    "75 DOUTORADO COMPLETO",
+    "85 POS-GRADUACAO/ESPECIALIZACAO",
+    "95 POS-DOUTORADO"
+  ],
+  "raca": [
+    { "value": "1", "label": "1 - Indígena" },
+    { "value": "2", "label": "2 - Branca" },
+    { "value": "4", "label": "4 - Negra" },
+    { "value": "6", "label": "6 - Amarela" },
+    { "value": "8", "label": "8 - Parda" },
+    { "value": "9", "label": "9 - Não informado" }
+  ],
+  "dependente_grau_parentesco": [
+    { "value": "01", "label": "01 - Cônjuge" },
+    { "value": "02", "label": "02 - Companheiro(a) com filho ou união superior a 5 anos" },
+    { "value": "03", "label": "03 - Filho(a) ou enteado(a) até 21 anos" },
+    { "value": "04", "label": "04 - Filho(a) ou enteado(a) universitário(a) até 24 anos" },
+    { "value": "05", "label": "05 - Filho(a) ou enteado(a) incapacitado(a)" },
+    { "value": "06", "label": "06 - Irmão(ã), neto(a) ou bisneto(a) sem arrimo dos pais com guarda judicial" },
+    { "value": "07", "label": "07 - Irmão(ã), neto(a) ou bisneto(a) sem arrimo dos pais até 24 anos estudando" },
+    { "value": "08", "label": "08 - Irmão(ã), neto(a) ou bisneto(a) sem arrimo dos pais com guarda judicial" },
+    { "value": "09", "label": "09 - Pais, avós e bisavós" },
+    { "value": "10", "label": "10 - Menor pobre até 21 anos com guarda judicial" },
+    { "value": "11", "label": "11 - Pessoa totalmente incapaz sob tutela ou curatela" },
+    { "value": "12", "label": "12 - Ex-cônjuge com pensão de alimentos" }
+  ],
+  "dependente_ir": [
+    { "value": "1", "label": "1 - Sem limite de idade" },
+    { "value": "2", "label": "2 - Até 21 anos" },
+    { "value": "3", "label": "3 - Até 24 anos" },
+    { "value": "4", "label": "4 - Não é dependente" }
+  ],
+  "conjuge_grau_parentesco": [
+    { "value": "01", "label": "01 - Cônjuge" },
+    { "value": "02", "label": "02 - Companheiro(a) com filho ou união superior a 5 anos" }
+  ],
+  "conjuge_ir": [
+    { "value": "1", "label": "1 - Sem limite de idade" },
+    { "value": "2", "label": "2 - Até 21 anos" },
+    { "value": "3", "label": "3 - Até 24 anos" },
+    { "value": "4", "label": "4 - Não é dependente" }
+  ]
+}

@@ -57,7 +57,7 @@ function createApp(config = createConfig(), overrides = {}) {
         });
 
         return res.status(400).json({
-          error: `Template não encontrado. Coloque o arquivo ${config.templateFilename} na raiz do projeto.`
+          error: `Template não encontrado. Coloque o arquivo ${config.templateFilename} na pasta templates do projeto.`
         });
       }
 
