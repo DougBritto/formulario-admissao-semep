@@ -5,7 +5,13 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { createConfig } = require('../lib/config');
-const { isValidCpf, isValidPisPasep, validatePayload, validatePayloadDetailed } = require('../lib/validation');
+const {
+  isValidCalendarDate,
+  isValidCpf,
+  isValidPisPasep,
+  validatePayload,
+  validatePayloadDetailed
+} = require('../lib/validation');
 const { buildOutputFilename } = require('../lib/excel');
 const { createApp } = require('../app-server');
 
@@ -13,7 +19,7 @@ function makeConfig(overrides = {}) {
   return {
     ...createConfig({
       PORT: '3000',
-      TEMPLATE_FILENAME: 'FOR 33 RH - Solicitação de Cadastro e Admissão Rev 05.xlsx',
+      TEMPLATE_FILENAME: 'FOR.CRC.GRH.007. Solicitação de Cadastro e Admissão - SCA.xlsx',
       RESEND_API_KEY: 'test-key',
       RESEND_FROM: 'onboarding@resend.dev',
       EMAIL_TO: 'teste@example.com',
@@ -69,10 +75,16 @@ test('validates cpf check digits', () => {
   assert.equal(isValidCpf('529.982.247-24'), false);
 });
 
-test('validates pis/pasep check digit', () => {
+test('validates pis/pasep format', () => {
   assert.equal(isValidPisPasep('00000005621'), true);
   assert.equal(isValidPisPasep('120.44561.50-3'), false);
   assert.equal(isValidPisPasep('1234567890'), false);
+});
+
+test('validates actual calendar dates', () => {
+  assert.equal(isValidCalendarDate('29/02/2024'), true);
+  assert.equal(isValidCalendarDate('29/02/2025'), false);
+  assert.equal(isValidCalendarDate('31/04/2026'), false);
 });
 
 test('returns field errors map for invalid payload', () => {
@@ -86,7 +98,10 @@ test('returns field errors map for invalid payload', () => {
   assert.equal(result.isValid, false);
   assert.equal(result.fieldErrors.cpf, 'CPF inválido.');
   assert.equal(result.fieldErrors.cep, 'CEP deve ter 8 dígitos.');
-  assert.equal(result.fieldErrors.pis_pasep, 'PIS/PASEP deve conter 11 números, sem pontos ou caracteres especiais.');
+  assert.equal(
+    result.fieldErrors.pis_pasep,
+    'PIS/PASEP deve conter 11 números, sem pontos ou caracteres especiais.'
+  );
 });
 
 test('rejects invalid select options from workbook-backed lists', () => {
@@ -130,6 +145,30 @@ test('rejects invalid spouse select options from workbook-backed lists', () => {
   assert.equal(result.fieldErrors.conjuge_ir, 'Selecione uma opção válida de IR para o cônjuge.');
 });
 
+test('GET /health returns runtime status', async () => {
+  const config = makeConfig({
+    auditFilePath: makeAuditFilePath()
+  });
+  const app = createApp(config, {
+    logger: { info() {}, warn() {}, error() {} }
+  });
+  const server = http.createServer(app);
+
+  await new Promise((resolve) => server.listen(0, resolve));
+  const { port } = server.address();
+
+  try {
+    const response = await fetch(`http://127.0.0.1:${port}/health`);
+    const data = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.ok(data.requestId);
+    assert.ok(['ok', 'degraded'].includes(data.status));
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 test('GET /api/config returns runtime configuration', async () => {
   const config = makeConfig({
     auditFilePath: makeAuditFilePath()
@@ -150,6 +189,8 @@ test('GET /api/config returns runtime configuration', async () => {
     assert.equal(data.emailTo, 'teste@example.com');
     assert.equal(data.maxDependentes, 5);
     assert.equal(data.emailConfigured, true);
+    assert.equal(data.emailProvider, 'resend');
+    assert.ok(data.validationConfig);
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
@@ -168,7 +209,7 @@ test('POST /api/generate returns success with injected services and writes audit
   const app = createApp(config, {
     logger: { info() {}, warn() {}, error() {} },
     buildWorkbookBuffer: async () => Buffer.from('arquivo'),
-    buildOutputFilename: () => 'SCA_MARIA_DA_SILVA_2026-03-30.xlsx',
+    buildOutputFilename: () => 'SCA_MARIA_DA_SILVA_2026-03-31.xlsx',
     sendInternalEmail: async () => {
       sent.internal = true;
     },
@@ -191,14 +232,19 @@ test('POST /api/generate returns success with injected services and writes audit
 
     assert.equal(response.status, 200);
     assert.equal(data.success, true);
-    assert.equal(data.fileName, 'SCA_MARIA_DA_SILVA_2026-03-30.xlsx');
+    assert.equal(data.fileName, 'SCA_MARIA_DA_SILVA_2026-03-31.xlsx');
     assert.equal(sent.internal, true);
     assert.equal(sent.confirmation, true);
 
-    const auditLog = fs.readFileSync(auditFilePath, 'utf8').trim().split('\n').map((line) => JSON.parse(line));
+    const auditLog = fs
+      .readFileSync(auditFilePath, 'utf8')
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line));
     assert.equal(auditLog.length, 2);
     assert.equal(auditLog[0].type, 'received');
     assert.equal(auditLog[1].type, 'succeeded');
+    assert.ok(auditLog[0].meta.requestId);
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
@@ -231,7 +277,11 @@ test('POST /api/generate returns validation error and records rejection', async 
     assert.equal(data.error, 'CPF inválido.');
     assert.equal(data.fieldErrors.cpf, 'CPF inválido.');
 
-    const auditLog = fs.readFileSync(auditFilePath, 'utf8').trim().split('\n').map((line) => JSON.parse(line));
+    const auditLog = fs
+      .readFileSync(auditFilePath, 'utf8')
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line));
     assert.equal(auditLog.length, 2);
     assert.equal(auditLog[0].type, 'received');
     assert.equal(auditLog[1].type, 'rejected');

@@ -13,54 +13,18 @@ const racaSelect = document.getElementById('racaSelect');
 const conjugeGrauParentescoSelect = document.getElementById('conjugeGrauParentescoSelect');
 const conjugeIrSelect = document.getElementById('conjugeIrSelect');
 
-const DATE_FIELD_LABELS = [
-  ['data_nascimento', 'Data de nascimento'],
-  ['rg_data_emissao', 'Data de emissão do RG'],
-  ['ctps_data_emissao', 'Data emissão CTPS'],
-  ['cnh_data_emissao', 'Data emissão CNH'],
-  ['cnh_data_vencimento', 'Data vencimento CNH'],
-  ['conjuge_data_nascimento', 'Data de nascimento do cônjuge'],
-  ['conjuge_data_casamento', 'Data de casamento']
-];
-
-const MAX_LENGTHS = {
-  nome: 120,
-  naturalidade: 80,
-  nome_mae: 120,
-  nome_pai: 120,
-  grau_instrucao: 80,
-  contato_emergencia: 120,
-  raca: 40,
-  banco: 60,
-  agencia: 20,
-  conta_pagto: 30,
-  rg_numero: 20,
-  orgao_emissor_rg: 30,
-  ctps_numero: 20,
-  ctps_serie: 10,
-  cnh_numero: 20,
-  cnh_categoria: 5,
-  cnh_categoria_outros: 50,
-  orgao_emissor_cnh: 30,
-  reservista: 30,
-  titulo_eleitor: 20,
-  titulo_zona: 10,
-  titulo_secao: 10,
-  endereco: 120,
-  numero: 10,
-  complemento: 60,
-  bairro: 60,
-  cidade: 80,
-  conjuge_nome: 120,
-  conjuge_grau_parentesco: 40,
-  conjuge_local_nascimento: 80,
-  dnv: 20
-};
-
 let maxDependentes = 5;
 let formOptions = {
   grau_instrucao: [],
   raca: []
+};
+let validationConfig = {
+  requiredFields: [],
+  dateFieldLabels: [],
+  maxLengths: {},
+  numericLengths: {},
+  numericRanges: {},
+  fieldMessages: {}
 };
 
 function setFeedback(message = '', type = '') {
@@ -69,7 +33,7 @@ function setFeedback(message = '', type = '') {
 }
 
 function digitsOnly(value) {
-  return (value || '').replace(/\D/g, '');
+  return String(value || '').replace(/\D/g, '');
 }
 
 function isRepeatedDigits(value) {
@@ -103,6 +67,33 @@ function isValidPisPasep(value) {
   const raw = String(value || '').trim();
   const digits = digitsOnly(raw);
   return raw === digits && digits.length === 11;
+}
+
+function isValidEmail(value) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || '').trim());
+}
+
+function isValidUf(value) {
+  return /^[A-Za-z]{2}$/.test(String(value || '').trim());
+}
+
+function isValidCalendarDate(value) {
+  const text = String(value || '').trim();
+  if (!text) return true;
+
+  const match = text.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (!match) return false;
+
+  const day = Number(match[1]);
+  const month = Number(match[2]);
+  const year = Number(match[3]);
+  const date = new Date(year, month - 1, day);
+
+  return (
+    date.getFullYear() === year &&
+    date.getMonth() === month - 1 &&
+    date.getDate() === day
+  );
 }
 
 function applyMask(value, type) {
@@ -171,8 +162,7 @@ function fillSelectOptions(selectElement, options, formatter = (option) => optio
 function populateDynamicSelects(root = document) {
   root.querySelectorAll('[data-options-source]').forEach((selectElement) => {
     const source = selectElement.dataset.optionsSource;
-    const options = formOptions[source] || [];
-    fillSelectOptions(selectElement, options, (option) => option);
+    fillSelectOptions(selectElement, formOptions[source] || [], (option) => option);
   });
 }
 
@@ -349,15 +339,6 @@ function serializeForm() {
   return payload;
 }
 
-function validateDate(value) {
-  if (!value) return true;
-  return /^(0[1-9]|[12]\d|3[01])\/(0[1-9]|1[0-2])\/\d{4}$/.test(value.trim());
-}
-
-function validateEmail(value) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || '').trim());
-}
-
 function setValidationError(fieldErrors, key, message) {
   if (!fieldErrors[key]) {
     fieldErrors[key] = message;
@@ -365,107 +346,83 @@ function setValidationError(fieldErrors, key, message) {
 }
 
 function validateRequiredFields(payload, fieldErrors) {
-  const requiredFields = [
-    ['nome', 'Nome'],
-    ['sexo_funcionario', 'Sexo'],
-    ['estado_civil', 'Estado civil'],
-    ['data_nascimento', 'Data de nascimento'],
-    ['cpf', 'CPF'],
-    ['email', 'E-mail'],
-    ['celular', 'Celular']
-  ];
-
-  requiredFields.forEach(([key, label]) => {
+  validationConfig.requiredFields.forEach(({ key, label }) => {
     if (!String(payload[key] || '').trim()) {
       setValidationError(fieldErrors, key, `${label} é obrigatório.`);
     }
   });
 }
 
-function validateMaxLengths(payload, fieldErrors) {
-  Object.entries(MAX_LENGTHS).forEach(([key, maxLength]) => {
+function validateMaxLengths(payload, fieldErrors, prefix = '') {
+  Object.entries(validationConfig.maxLengths).forEach(([key, maxLength]) => {
     if (!payload[key]) return;
     if (String(payload[key]).trim().length > maxLength) {
-      setValidationError(fieldErrors, key, `Máximo de ${maxLength} caracteres.`);
+      setValidationError(fieldErrors, `${prefix}${key}`, `Máximo de ${maxLength} caracteres.`);
     }
   });
 }
 
 function validateFormPayload(payload) {
   const fieldErrors = {};
+  const messages = validationConfig.fieldMessages;
 
   validateRequiredFields(payload, fieldErrors);
 
-  if (payload.email && !validateEmail(payload.email)) {
-    setValidationError(fieldErrors, 'email', 'Informe um e-mail válido.');
+  if (payload.email && !isValidEmail(payload.email)) {
+    setValidationError(fieldErrors, 'email', messages.invalidEmail);
   }
 
   if (payload.grau_instrucao && !(formOptions.grau_instrucao || []).includes(payload.grau_instrucao)) {
-    setValidationError(fieldErrors, 'grau_instrucao', 'Selecione um grau de instrução válido.');
+    setValidationError(fieldErrors, 'grau_instrucao', messages.invalidEducation);
   }
 
   if (payload.raca && !(formOptions.raca || []).some((option) => option.value === payload.raca)) {
-    setValidationError(fieldErrors, 'raca', 'Selecione uma raça válida.');
+    setValidationError(fieldErrors, 'raca', messages.invalidRace);
   }
 
-  if (payload.conjuge_grau_parentesco && !(formOptions.conjuge_grau_parentesco || []).some((option) => option.value === payload.conjuge_grau_parentesco)) {
-    setValidationError(fieldErrors, 'conjuge_grau_parentesco', 'Selecione um grau de parentesco válido para o cônjuge.');
+  if (
+    payload.conjuge_grau_parentesco &&
+    !(formOptions.conjuge_grau_parentesco || []).some(
+      (option) => option.value === payload.conjuge_grau_parentesco
+    )
+  ) {
+    setValidationError(fieldErrors, 'conjuge_grau_parentesco', messages.invalidSpouseRelation);
   }
 
   if (payload.conjuge_ir && !(formOptions.conjuge_ir || []).some((option) => option.value === payload.conjuge_ir)) {
-    setValidationError(fieldErrors, 'conjuge_ir', 'Selecione uma opção válida de IR para o cônjuge.');
+    setValidationError(fieldErrors, 'conjuge_ir', messages.invalidSpouseIr);
   }
 
   if (payload.cpf && !isValidCpf(payload.cpf)) {
-    setValidationError(fieldErrors, 'cpf', 'Informe um CPF válido.');
+    setValidationError(fieldErrors, 'cpf', messages.invalidCpf);
   }
 
   if (payload.conjuge_cpf && !isValidCpf(payload.conjuge_cpf)) {
-    setValidationError(fieldErrors, 'conjuge_cpf', 'Informe um CPF válido para o cônjuge.');
-  }
-
-  if (payload.cep && digitsOnly(payload.cep).length !== 8) {
-    setValidationError(fieldErrors, 'cep', 'CEP deve ter 8 dígitos.');
-  }
-
-  if (payload.ddd_celular && digitsOnly(payload.ddd_celular).length !== 2) {
-    setValidationError(fieldErrors, 'ddd_celular', 'DDD deve ter 2 dígitos.');
-  }
-
-  const phoneDigits = digitsOnly(payload.celular);
-  if (payload.celular && (phoneDigits.length < 10 || phoneDigits.length > 11)) {
-    setValidationError(fieldErrors, 'celular', 'Informe um celular com DDD e 10 ou 11 dígitos.');
+    setValidationError(fieldErrors, 'conjuge_cpf', messages.invalidSpouseCpf);
   }
 
   if (payload.pis_pasep && !isValidPisPasep(payload.pis_pasep)) {
-    setValidationError(fieldErrors, 'pis_pasep', 'PIS/PASEP deve conter 11 números, sem pontos ou caracteres especiais.');
+    setValidationError(fieldErrors, 'pis_pasep', messages.invalidPisPasep);
   }
 
-  if (payload.cnh_numero && digitsOnly(payload.cnh_numero).length !== 11) {
-    setValidationError(fieldErrors, 'cnh_numero', 'Número da CNH deve ter 11 dígitos.');
-  }
-
-  if (payload.titulo_eleitor && digitsOnly(payload.titulo_eleitor).length !== 12) {
-    setValidationError(fieldErrors, 'titulo_eleitor', 'Título de eleitor deve ter 12 dígitos.');
-  }
-
-  if (payload.titulo_zona) {
-    const zonaDigits = digitsOnly(payload.titulo_zona);
-    if (zonaDigits.length < 1 || zonaDigits.length > 4) {
-      setValidationError(fieldErrors, 'titulo_zona', 'Zona deve ter entre 1 e 4 dígitos.');
+  Object.entries(validationConfig.numericLengths).forEach(([key, rule]) => {
+    if (!payload[key]) return;
+    if (digitsOnly(payload[key]).length !== rule.exactLength) {
+      setValidationError(fieldErrors, key, `${rule.label} deve ter ${rule.exactLength} dígitos.`);
     }
-  }
+  });
 
-  if (payload.titulo_secao) {
-    const secaoDigits = digitsOnly(payload.titulo_secao);
-    if (secaoDigits.length < 1 || secaoDigits.length > 4) {
-      setValidationError(fieldErrors, 'titulo_secao', 'Seção deve ter entre 1 e 4 dígitos.');
+  Object.entries(validationConfig.numericRanges).forEach(([key, rule]) => {
+    if (!payload[key]) return;
+    const digits = digitsOnly(payload[key]);
+    if (digits.length < rule.min || digits.length > rule.max) {
+      setValidationError(fieldErrors, key, `${rule.label} deve ter entre ${rule.min} e ${rule.max} dígitos.`);
     }
-  }
+  });
 
-  DATE_FIELD_LABELS.forEach(([field, label]) => {
-    if (!validateDate(payload[field])) {
-      setValidationError(fieldErrors, field, `${label} deve estar no formato dd/mm/aaaa.`);
+  validationConfig.dateFieldLabels.forEach(({ key, label }) => {
+    if (!isValidCalendarDate(payload[key])) {
+      setValidationError(fieldErrors, key, `${label} deve estar no formato dd/mm/aaaa e conter uma data válida.`);
     }
   });
 
@@ -474,17 +431,16 @@ function validateFormPayload(payload) {
     ['ctps_uf', 'UF CTPS'],
     ['cnh_uf', 'UF CNH'],
     ['uf_endereco', 'UF']
-  ].forEach(([field, label]) => {
-    const value = String(payload[field] || '').trim();
-    if (value && !/^[A-Za-z]{2}$/.test(value)) {
-      setValidationError(fieldErrors, field, `${label} deve conter 2 letras.`);
+  ].forEach(([key, label]) => {
+    if (payload[key] && !isValidUf(payload[key])) {
+      setValidationError(fieldErrors, key, `${label} deve conter 2 letras.`);
     }
   });
 
   validateMaxLengths(payload, fieldErrors);
 
   payload.dependentes.forEach((dependente, index) => {
-    const prefix = `dependentes.${index}`;
+    const prefix = `dependentes.${index}.`;
     const hasSomeValue = Object.values(dependente || {}).some((value) => {
       if (typeof value === 'boolean') return value;
       return String(value || '').trim() !== '';
@@ -493,35 +449,43 @@ function validateFormPayload(payload) {
     if (!hasSomeValue) return;
 
     if (!String(dependente.nome || '').trim()) {
-      setValidationError(fieldErrors, `${prefix}.nome`, 'Nome do dependente é obrigatório.');
+      setValidationError(fieldErrors, `${prefix}nome`, messages.invalidDependentName);
     }
 
-    if (!validateDate(dependente.data_nascimento)) {
-      setValidationError(fieldErrors, `${prefix}.data_nascimento`, 'Data deve estar no formato dd/mm/aaaa.');
+    if (!isValidCalendarDate(dependente.data_nascimento)) {
+      setValidationError(
+        fieldErrors,
+        `${prefix}data_nascimento`,
+        'Data de nascimento do dependente deve estar no formato dd/mm/aaaa e conter uma data válida.'
+      );
     }
 
     if (dependente.cpf && !isValidCpf(dependente.cpf)) {
-      setValidationError(fieldErrors, `${prefix}.cpf`, 'CPF do dependente inválido.');
+      setValidationError(fieldErrors, `${prefix}cpf`, messages.invalidDependentCpf);
     }
 
-    if (dependente.grau_parentesco && !(formOptions.dependente_grau_parentesco || []).some((option) => option.value === dependente.grau_parentesco)) {
-      setValidationError(fieldErrors, `${prefix}.grau_parentesco`, 'Selecione um grau de parentesco válido.');
+    if (
+      dependente.grau_parentesco &&
+      !(formOptions.dependente_grau_parentesco || []).some(
+        (option) => option.value === dependente.grau_parentesco
+      )
+    ) {
+      setValidationError(fieldErrors, `${prefix}grau_parentesco`, messages.invalidDependentRelation);
     }
 
     if (dependente.ir && !(formOptions.dependente_ir || []).some((option) => option.value === dependente.ir)) {
-      setValidationError(fieldErrors, `${prefix}.ir`, 'Selecione uma opção válida para IR.');
+      setValidationError(fieldErrors, `${prefix}ir`, messages.invalidDependentIr);
     }
 
-    if (dependente.dnv && digitsOnly(dependente.dnv).length !== 11) {
-      setValidationError(fieldErrors, `${prefix}.dnv`, 'DNV deve ter 11 dígitos.');
+    if (dependente.dnv && digitsOnly(dependente.dnv).length !== validationConfig.numericLengths.dnv.exactLength) {
+      setValidationError(
+        fieldErrors,
+        `${prefix}dnv`,
+        `${validationConfig.numericLengths.dnv.label} deve ter ${validationConfig.numericLengths.dnv.exactLength} dígitos.`
+      );
     }
 
-    Object.entries(MAX_LENGTHS).forEach(([key, maxLength]) => {
-      if (!dependente[key]) return;
-      if (String(dependente[key]).trim().length > maxLength) {
-        setValidationError(fieldErrors, `${prefix}.${key}`, `Máximo de ${maxLength} caracteres.`);
-      }
-    });
+    validateMaxLengths(dependente, fieldErrors, prefix);
   });
 
   return {
@@ -537,15 +501,20 @@ async function fetchConfig() {
 
     maxDependentes = Number(config.maxDependentes) || 5;
     formOptions = config.formOptions || formOptions;
+    validationConfig = config.validationConfig || validationConfig;
+
     updateDependentsHint();
-    fillSelectOptions(grauInstrucaoSelect, formOptions.grau_instrucao || [], (option) => ({ value: option, label: option }));
+    fillSelectOptions(grauInstrucaoSelect, formOptions.grau_instrucao || [], (option) => ({
+      value: option,
+      label: option
+    }));
     fillSelectOptions(racaSelect, formOptions.raca || [], (option) => option);
     fillSelectOptions(conjugeGrauParentescoSelect, formOptions.conjuge_grau_parentesco || [], (option) => option);
     fillSelectOptions(conjugeIrSelect, formOptions.conjuge_ir || [], (option) => option);
     populateDynamicSelects();
 
     templateStatus.textContent = config.templateFound
-      ? `Template OK | E-mail ${config.emailConfigured ? 'OK' : 'pendente'}`
+      ? `Template OK | E-mail ${config.emailProvider}/${config.emailConfigured ? 'OK' : 'pendente'}`
       : `Ausente: ${config.templateFilename}`;
     templateStatus.style.color = config.templateFound && config.emailConfigured ? '#027a48' : '#b42318';
     emailTarget.textContent = config.emailTo || '-';
@@ -588,7 +557,8 @@ async function handleSubmit(event) {
     }
 
     setFeedback(
-      data.message || 'Seus dados foram enviados com sucesso. O setor de Recursos Humanos realizará a conferência e entrará em contato caso necessário.',
+      data.message ||
+        'Seus dados foram enviados com sucesso. O setor de Recursos Humanos realizará a conferência e entrará em contato caso necessário.',
       'success'
     );
   } catch (error) {

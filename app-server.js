@@ -7,6 +7,19 @@ const { buildWorkbookBuffer, buildOutputFilename } = require('./lib/excel');
 const { sendInternalEmail, sendCollaboratorConfirmation } = require('./lib/email');
 const { createLogger } = require('./lib/logger');
 const { recordSubmissionEvent } = require('./lib/audit');
+const {
+  createCorsMiddleware,
+  createRateLimitMiddleware,
+  createRequestIdMiddleware,
+  createSecurityHeadersMiddleware
+} = require('./lib/http-security');
+
+function requestMeta(req, extra = {}) {
+  return {
+    requestId: req.requestId,
+    ...extra
+  };
+}
 
 function createApp(config = createConfig(), overrides = {}) {
   const app = express();
@@ -16,112 +29,167 @@ function createApp(config = createConfig(), overrides = {}) {
   const internalEmailSender = overrides.sendInternalEmail || sendInternalEmail;
   const collaboratorConfirmationSender = overrides.sendCollaboratorConfirmation || sendCollaboratorConfirmation;
 
+  app.disable('x-powered-by');
+  app.use(createRequestIdMiddleware());
+  app.use(createSecurityHeadersMiddleware());
+  app.use(createCorsMiddleware(config.allowedOrigins));
   app.use(express.json({ limit: '2mb' }));
   app.use(express.static(path.join(__dirname, 'public')));
 
+  app.get('/health', (req, res) => {
+    const templateFound = fs.existsSync(config.templatePath);
+
+    return res.json({
+      status: templateFound && config.emailConfigured ? 'ok' : 'degraded',
+      time: new Date().toISOString(),
+      requestId: req.requestId,
+      templateFound,
+      emailConfigured: config.emailConfigured,
+      emailProvider: config.emailProvider
+    });
+  });
+
   app.get('/api/config', (req, res) => {
     const templateFound = fs.existsSync(config.templatePath);
-    const emailConfigured = Boolean(config.resendApiKey);
 
-    logger.info('config_requested', {
-      templateFound,
-      emailConfigured
-    });
+    logger.info(
+      'config_requested',
+      requestMeta(req, {
+        templateFound,
+        emailConfigured: config.emailConfigured
+      })
+    );
 
     res.json({
       templateFilename: config.templateFilename,
       templateFound,
       maxDependentes: config.maxDependentes,
       emailTo: config.emailTo,
-      emailConfigured,
+      emailConfigured: config.emailConfigured,
+      emailProvider: config.emailProvider,
       confirmationEnabled: config.confirmationEnabled,
-      formOptions: config.formOptions
+      formOptions: config.formOptions,
+      validationConfig: config.validationConfig
     });
   });
 
-  app.post('/api/generate', async (req, res) => {
-    try {
-      logger.info('submission_received', {
-        hasDependentes: Array.isArray(req.body?.dependentes) && req.body.dependentes.length > 0
-      });
-      await recordSubmissionEvent(config.auditFilePath, 'received', req.body || {}, {
-        emailDeliveryMode: config.emailDeliveryMode
-      });
-
-      if (!fs.existsSync(config.templatePath)) {
-        logger.warn('template_missing', {
-          templatePath: config.templatePath
+  app.post(
+    '/api/generate',
+    createRateLimitMiddleware({
+      windowMs: config.rateLimitWindowMs,
+      maxRequests: config.rateLimitMaxRequests,
+      keyPrefix: 'generate'
+    }),
+    async (req, res) => {
+      try {
+        logger.info(
+          'submission_received',
+          requestMeta(req, {
+            hasDependentes: Array.isArray(req.body?.dependentes) && req.body.dependentes.length > 0
+          })
+        );
+        await recordSubmissionEvent(config.auditFilePath, 'received', req.body || {}, {
+          requestId: req.requestId,
+          emailDeliveryMode: config.emailDeliveryMode
         });
-        await recordSubmissionEvent(config.auditFilePath, 'rejected', req.body || {}, {
-          reason: 'template_missing'
+
+        if (!fs.existsSync(config.templatePath)) {
+          logger.warn(
+            'template_missing',
+            requestMeta(req, {
+              templatePath: config.templatePath
+            })
+          );
+          await recordSubmissionEvent(config.auditFilePath, 'rejected', req.body || {}, {
+            requestId: req.requestId,
+            reason: 'template_missing'
+          });
+
+          return res.status(400).json({
+            error: `Template não encontrado. Coloque o arquivo ${config.templateFilename} em ${config.templateDir}.`
+          });
+        }
+
+        const payload = req.body || {};
+        const validationResult = validatePayloadDetailed(payload, config);
+        if (!validationResult.isValid) {
+          logger.warn(
+            'submission_rejected',
+            requestMeta(req, {
+              reason: validationResult.message,
+              fieldErrors: validationResult.fieldErrors
+            })
+          );
+          await recordSubmissionEvent(config.auditFilePath, 'rejected', payload, {
+            requestId: req.requestId,
+            reason: validationResult.message
+          });
+
+          return res.status(400).json({
+            error: validationResult.message,
+            fieldErrors: validationResult.fieldErrors
+          });
+        }
+
+        const fileBuffer = await workbookBuilder(payload, config);
+        const filename = outputFilenameBuilder(payload.nome);
+
+        logger.info(
+          'workbook_generated',
+          requestMeta(req, {
+            filename
+          })
+        );
+
+        await internalEmailSender({ payload, fileBuffer, filename, config });
+        logger.info(
+          'internal_email_sent',
+          requestMeta(req, {
+            emailTo: config.emailTo,
+            filename
+          })
+        );
+
+        await collaboratorConfirmationSender(payload, config);
+        logger.info(
+          'confirmation_processed',
+          requestMeta(req, {
+            confirmationEnabled: config.confirmationEnabled,
+            recipient: payload.email || null
+          })
+        );
+        await recordSubmissionEvent(config.auditFilePath, 'succeeded', payload, {
+          requestId: req.requestId,
+          filename,
+          emailDeliveryMode: config.emailDeliveryMode,
+          confirmationSent: config.confirmationEnabled && Boolean(payload.email)
         });
 
-        return res.status(400).json({
-          error: `Template não encontrado. Coloque o arquivo ${config.templateFilename} na pasta templates do projeto.`
+        return res.json({
+          success: true,
+          message: `Formulário enviado com sucesso. Os dados foram encaminhados para ${config.emailTo}.`,
+          emailTo: config.emailTo,
+          fileName: filename,
+          confirmationSent: config.confirmationEnabled && Boolean(payload.email)
+        });
+      } catch (error) {
+        logger.error(
+          'submission_failed',
+          requestMeta(req, {
+            message: error.message
+          })
+        );
+        await recordSubmissionEvent(config.auditFilePath, 'failed', req.body || {}, {
+          requestId: req.requestId,
+          message: error.message
+        });
+
+        return res.status(500).json({
+          error: 'Não foi possível gerar a planilha e enviar os e-mails. Verifique a configuração de envio.'
         });
       }
-
-      const payload = req.body || {};
-      const validationResult = validatePayloadDetailed(payload, config);
-      if (!validationResult.isValid) {
-        logger.warn('submission_rejected', {
-          reason: validationResult.message,
-          fieldErrors: validationResult.fieldErrors
-        });
-        await recordSubmissionEvent(config.auditFilePath, 'rejected', payload, {
-          reason: validationResult.message
-        });
-
-        return res.status(400).json({
-          error: validationResult.message,
-          fieldErrors: validationResult.fieldErrors
-        });
-      }
-
-      const fileBuffer = await workbookBuilder(payload, config);
-      const filename = outputFilenameBuilder(payload.nome);
-
-      logger.info('workbook_generated', {
-        filename
-      });
-
-      await internalEmailSender({ payload, fileBuffer, filename, config });
-      logger.info('internal_email_sent', {
-        emailTo: config.emailTo,
-        filename
-      });
-
-      await collaboratorConfirmationSender(payload, config);
-      logger.info('confirmation_processed', {
-        confirmationEnabled: config.confirmationEnabled,
-        recipient: payload.email || null
-      });
-      await recordSubmissionEvent(config.auditFilePath, 'succeeded', payload, {
-        filename,
-        emailDeliveryMode: config.emailDeliveryMode,
-        confirmationSent: config.confirmationEnabled && Boolean(payload.email)
-      });
-
-      return res.json({
-        success: true,
-        message: `Formulário enviado com sucesso. Para teste, os dados foram encaminhados para ${config.emailTo}.`,
-        emailTo: config.emailTo,
-        fileName: filename,
-        confirmationSent: config.confirmationEnabled && Boolean(payload.email)
-      });
-    } catch (error) {
-      logger.error('submission_failed', {
-        message: error.message
-      });
-      await recordSubmissionEvent(config.auditFilePath, 'failed', req.body || {}, {
-        message: error.message
-      });
-
-      return res.status(500).json({
-        error: 'Não foi possível gerar a planilha e enviar os e-mails de teste. Verifique a configuração da Resend.'
-      });
     }
-  });
+  );
 
   return app;
 }

@@ -14,7 +14,10 @@
         <div>
           <h1>SEMEP</h1>
           <p>Formulário de Admissão de Colaborador</p>
-          <p class="intro-text">Preencha os dados abaixo com atenção. As informações serão utilizadas pelo setor de Recursos Humanos para fins de cadastro e admissão.</p>
+          <p class="intro-text">
+            Preencha os dados abaixo com atenção. As informações serão utilizadas pelo setor de Recursos Humanos
+            para fins de cadastro e admissão.
+          </p>
         </div>
       </div>
       <div class="status-card">
@@ -125,7 +128,7 @@
           <label>UF CTPS
             <input type="text" name="ctps_uf" maxlength="2" />
           </label>
-          <label>Data emissão CTPS
+          <label>Data de emissão da CTPS
             <input type="text" name="ctps_data_emissao" placeholder="dd/mm/aaaa" data-mask="date" />
           </label>
           <label>Número da CNH
@@ -137,10 +140,10 @@
           <label>Órgão emissor CNH
             <input type="text" name="orgao_emissor_cnh" />
           </label>
-          <label>Data emissão CNH
+          <label>Data de emissão da CNH
             <input type="text" name="cnh_data_emissao" placeholder="dd/mm/aaaa" data-mask="date" />
           </label>
-          <label>Data vencimento CNH
+          <label>Data de vencimento da CNH
             <input type="text" name="cnh_data_vencimento" placeholder="dd/mm/aaaa" data-mask="date" />
           </label>
           <label>UF CNH
@@ -229,6 +232,12 @@
           <label>Data de casamento
             <input type="text" name="conjuge_data_casamento" placeholder="dd/mm/aaaa" data-mask="date" />
           </label>
+          <label class="span-2">Nome da mãe
+            <input type="text" name="conjuge_nome_mae" />
+          </label>
+          <label class="span-2">Nome do pai
+            <input type="text" name="conjuge_nome_pai" />
+          </label>
         </div>
       </section>
 
@@ -256,10 +265,10 @@
       <section class="actions card">
         <div>
           <h2>Finalizar envio</h2>
-          <p>Ao clicar em enviar, seus dados serão convertidos para a planilha oficial e encaminhados por e-mail para o endereço de teste configurado.</p>
+          <p>Ao clicar em enviar, seus dados serão convertidos para a planilha oficial e encaminhados pelo canal configurado.</p>
         </div>
         <div class="actions-row">
-          <div class="email-destination">Destino do teste: <strong id="emailTarget">Carregando...</strong></div>
+          <div class="email-destination">Destino configurado: <strong id="emailTarget">Carregando...</strong></div>
           <button type="submit" id="submitBtn">Enviar formulário</button>
           <button type="button" id="clearBtn" class="secondary-button">Limpar formulário</button>
         </div>
@@ -309,7 +318,13 @@
           <input type="text" data-field="cpf" data-mask="cpf" />
         </label>
         <label>Nº nascido vivo (DNV)
-          <input type="text" data-field="dnv" />
+          <input type="text" data-field="dnv" data-numeric-only="11" />
+        </label>
+        <label class="span-2">Nome da mãe
+          <input type="text" data-field="nome_mae" />
+        </label>
+        <label class="span-2">Nome do pai
+          <input type="text" data-field="nome_pai" />
         </label>
       </div>
       <div class="checkbox-row">

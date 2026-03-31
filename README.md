@@ -1,23 +1,19 @@
-# Cadastro para Admissão - fluxo de teste
+# Cadastro para Admissão
 
 Aplicação web em HTML, CSS e JavaScript com backend Node.js para:
 
 - receber o preenchimento do colaborador;
-- converter os dados para a planilha-base oficial sem perder a estrutura;
-- enviar a planilha por e-mail para um endereço de teste;
-- enviar uma confirmação simples ao colaborador.
+- converter os dados para a planilha oficial da empresa;
+- enviar a planilha por e-mail;
+- enviar confirmação opcional ao colaborador.
 
-## Cenário atual
+## Template oficial
 
-Esta versão está preparada apenas para testes.
+Esta versão usa como template padrão:
 
-- destino interno de teste: `douglasbritto416@gmail.com`
-- confirmação ao colaborador: habilitada por padrão
+`FOR.CRC.GRH.007. Solicitação de Cadastro e Admissão - SCA.xlsx`
 
-Quando o colaborador envia o formulário:
-1. o sistema preenche a planilha oficial;
-2. envia a planilha para o e-mail de teste configurado;
-3. envia uma mensagem de confirmação para o e-mail informado no formulário.
+O arquivo deve ficar na pasta `templates/`, salvo quando `TEMPLATE_DIR` ou `TEMPLATE_FILENAME` forem alterados no `.env`.
 
 ## Como rodar
 
@@ -33,23 +29,6 @@ Crie o arquivo `.env` a partir do modelo:
 copy .env.example .env
 ```
 
-Edite o arquivo `.env` e informe sua chave da Resend.
-
-Exemplo:
-
-```env
-PORT=3000
-TEMPLATE_DIR=templates
-TEMPLATE_FILENAME=FOR 33 RH - Solicitação de Cadastro e Admissão Rev 05.xlsx
-RESEND_API_KEY=re_xxxxxxxxxxxxxxxxx
-RESEND_FROM=onboarding@resend.dev
-EMAIL_TO=douglasbritto416@gmail.com
-EMAIL_CONFIRMATION_ENABLED=true
-EMAIL_DELIVERY_MODE=live
-```
-
-Coloque a planilha base real na pasta [`templates`](/C:/Users/dolgl/Downloads/admissoes_form_resend_testflow_corporativo/templates) com o nome definido em `TEMPLATE_FILENAME`.
-
 Depois execute:
 
 ```bash
@@ -58,54 +37,79 @@ npm start
 
 Por fim, abra [http://localhost:3000](http://localhost:3000).
 
-## Repositório Git
+## Configuração por ambiente
 
-A planilha base real não precisa ficar versionada.
-
-- o projeto ignora automaticamente arquivos `.xlsx` dentro de [`templates`](/C:/Users/dolgl/Downloads/admissoes_form_resend_testflow_corporativo/templates)
-- mantenha apenas a pasta `templates/` no repositório
-- cada ambiente deve copiar sua própria planilha localmente para essa pasta
-
-Se a planilha não existir, a aplicação continuará subindo, mas o status do template aparecerá como ausente e a geração da planilha falhará até que o arquivo seja colocado na pasta correta.
-
-## Configuração da Resend
-
-No painel da Resend, gere uma API Key e cole no `.env`:
+Exemplo:
 
 ```env
+PORT=3000
+NODE_ENV=development
+TEMPLATE_DIR=templates
+TEMPLATE_FILENAME=FOR.CRC.GRH.007. Solicitação de Cadastro e Admissão - SCA.xlsx
+TEMPLATE_SHEET_NAME=SCA
+EMAIL_PROVIDER=resend
+EMAIL_TO=teste@example.com
+EMAIL_CONFIRMATION_ENABLED=true
+EMAIL_DELIVERY_MODE=simulate
 RESEND_API_KEY=re_xxxxxxxxxxxxxxxxx
+RESEND_FROM=onboarding@resend.dev
+ALLOWED_ORIGINS=http://localhost:3000
+RATE_LIMIT_WINDOW_MS=900000
+RATE_LIMIT_MAX_REQUESTS=20
 ```
 
-Para demonstração, o remetente padrão `onboarding@resend.dev` costuma funcionar bem.
+## SMTP corporativo
 
-## Fluxo de teste
+O sistema também pode enviar usando SMTP corporativo, como Microsoft 365, Exchange, Google Workspace ou gateway interno da empresa.
 
-- o colaborador abre o link do formulário;
-- preenche os dados;
-- marca a declaração;
-- clica em **Enviar formulário**;
-- o sistema gera a planilha oficial;
-- envia a planilha para o e-mail de teste;
-- envia uma confirmação para o colaborador.
+Exemplo:
+
+```env
+EMAIL_PROVIDER=smtp
+EMAIL_TO=rh@suaempresa.com.br
+EMAIL_CONFIRMATION_ENABLED=true
+EMAIL_DELIVERY_MODE=live
+SMTP_HOST=smtp.suaempresa.com.br
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=usuario@suaempresa.com.br
+SMTP_PASS=SENHA_OU_TOKEN_SMTP
+SMTP_FROM=RH <rh@suaempresa.com.br>
+```
+
+Ao usar SMTP:
+
+- `EMAIL_PROVIDER` deve ser `smtp`
+- `SMTP_HOST`, `SMTP_PORT` e `SMTP_FROM` devem estar preenchidos
+- `SMTP_USER` e `SMTP_PASS` são usados quando o servidor exige autenticação
+- `SMTP_SECURE=true` normalmente é usado em porta `465`
+- `SMTP_SECURE=false` normalmente é usado em porta `587`
+
+## Melhorias implementadas
+
+- validação de payload alinhada entre frontend e backend com regras compartilhadas;
+- validação de datas reais de calendário;
+- healthcheck em `/health`;
+- `requestId` por requisição;
+- headers de segurança HTTP;
+- rate limiting no `POST /api/generate`;
+- configuração com fail-fast no startup;
+- suporte a Resend e SMTP corporativo por variável de ambiente;
+- auditoria estruturada com `requestId`;
+- template final adotado como padrão do sistema.
 
 ## Estrutura principal
 
-- `public/index.html` -> formulário voltado ao colaborador
+- `public/index.html` -> formulário do colaborador
 - `public/styles.css` -> estilos
 - `public/app.js` -> comportamento do frontend
 - `app-server.js` -> criação da aplicação Express
-- `lib/config.js` -> leitura de ambiente e caminho do template
+- `lib/config.js` -> leitura e validação de configuração
 - `lib/validation.js` -> validação do payload
-- `lib/excel.js` -> geração da planilha
-- `lib/email.js` -> envio de e-mails
-- `config/mapeamento-campos.json` -> mapeamento de campos
-- `templates/` -> pasta local do template Excel, ignorada no Git
-
-## Atualizações recentes
-
-- correção de textos e mensagens em UTF-8
-- unificação do mapeamento da planilha via JSON
-- modularização do backend
-- inclusão de testes básicos para validação
-- auditoria mínima das submissões em `data/submission-audit.jsonl`
-- modo de simulação de e-mail via `EMAIL_DELIVERY_MODE=simulate`
+- `lib/excel.js` -> geração e verificação da planilha
+- `lib/email.js` -> roteamento de envio entre Resend e SMTP
+- `lib/email-smtp.js` -> transporte SMTP corporativo
+- `config/mapeamento-campos.json` -> mapeamento de células do template
+- `config/form-options.json` -> opções oficiais do formulário
+- `templates/` -> pasta do template Excel
+- `test/validation.test.js` -> testes automatizados

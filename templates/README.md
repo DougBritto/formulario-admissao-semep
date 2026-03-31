@@ -1,7 +1,7 @@
 # Templates locais
 
-Coloque nesta pasta a planilha base usada pela aplicação:
+Template oficial atual da aplicação:
 
-`FOR 33 RH - Solicitação de Cadastro e Admissão Rev 05.xlsx`
+`FOR.CRC.GRH.007. Solicitação de Cadastro e Admissão - SCA.xlsx`
 
-Esse arquivo não deve ser versionado no Git.
+Esse arquivo pode ser mantido localmente ou versionado conforme a política da empresa.
