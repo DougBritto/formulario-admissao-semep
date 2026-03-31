@@ -1,0 +1,9 @@
+node_modules/
+.env
+output/
+data/
+*.log
+
+templates/*.xlsx
+templates/*.xls
+!templates/.gitkeep
