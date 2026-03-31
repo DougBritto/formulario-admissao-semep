@@ -52,6 +52,8 @@
     "conjuge_local_nascimento": "W44",
     "conjuge_cpf": "AD44",
     "conjuge_data_casamento": "AI44",
+    "conjuge_nome_mae": "F45",
+    "conjuge_nome_pai": "W45",
     "plano_saude_dependentes": "F65",
     "plano_odonto_dependentes": "F66"
   },
@@ -64,7 +66,9 @@
       "ir": "V48",
       "local_nascimento": "W48",
       "cpf": "AD48",
-      "dnv": "AI48"
+      "dnv": "AI48",
+      "nome_mae": "F49",
+      "nome_pai": "W49"
     },
     {
       "nome": "F50",
@@ -74,7 +78,9 @@
       "ir": "V50",
       "local_nascimento": "W50",
       "cpf": "AD50",
-      "dnv": "AI50"
+      "dnv": "AI50",
+      "nome_mae": "F51",
+      "nome_pai": "W51"
     },
     {
       "nome": "F52",
@@ -84,7 +90,9 @@
       "ir": "V52",
       "local_nascimento": "W52",
       "cpf": "AD52",
-      "dnv": "AI52"
+      "dnv": "AI52",
+      "nome_mae": "F53",
+      "nome_pai": "W53"
     },
     {
       "nome": "F54",
@@ -94,7 +102,9 @@
       "ir": "V54",
       "local_nascimento": "W54",
       "cpf": "AD54",
-      "dnv": "AI54"
+      "dnv": "AI54",
+      "nome_mae": "F55",
+      "nome_pai": "W55"
     },
     {
       "nome": "F56",
@@ -104,7 +114,9 @@
       "ir": "V56",
       "local_nascimento": "W56",
       "cpf": "AD56",
-      "dnv": "AI56"
+      "dnv": "AI56",
+      "nome_mae": "F57",
+      "nome_pai": "W57"
     }
   ]
 }

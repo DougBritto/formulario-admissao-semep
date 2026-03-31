@@ -9,19 +9,19 @@
 <body>
   <main class="container">
     <header class="page-header">
-  <div class="brand">
-    <img src="logo.png" alt="SEMEP" class="logo" />
-    <div>
-      <h1>SEMEP</h1>
-      <p>Formulário de Admissão de Colaborador</p>
-      <p class="intro-text">Preencha os dados abaixo com atenção. As informações serão utilizadas pelo setor de Recursos Humanos para fins de cadastro e admissão.</p>
-    </div>
-  </div>
-  <div class="status-card">
-    <strong>Ambiente de teste</strong>
-    <span id="templateStatus">Verificando...</span>
-  </div>
-</header>
+      <div class="brand">
+        <img src="logo.png" alt="SEMEP" class="logo" />
+        <div>
+          <h1>SEMEP</h1>
+          <p>Formulário de Admissão de Colaborador</p>
+          <p class="intro-text">Preencha os dados abaixo com atenção. As informações serão utilizadas pelo setor de Recursos Humanos para fins de cadastro e admissão.</p>
+        </div>
+      </div>
+      <div class="status-card">
+        <strong>Ambiente de teste</strong>
+        <span id="templateStatus">Verificando...</span>
+      </div>
+    </header>
 
     <form id="admissionForm">
       <section class="card">
@@ -64,7 +64,9 @@
             <input type="text" name="nome_pai" />
           </label>
           <label>Grau de instrução
-            <input type="text" name="grau_instrucao" />
+            <select name="grau_instrucao" id="grauInstrucaoSelect">
+              <option value="">Selecione</option>
+            </select>
           </label>
           <label>E-mail
             <input type="email" name="email" required />
@@ -73,7 +75,9 @@
             <input type="text" name="contato_emergencia" />
           </label>
           <label>Raça
-            <input type="text" name="raca" />
+            <select name="raca" id="racaSelect">
+              <option value="">Selecione</option>
+            </select>
           </label>
         </div>
       </section>
@@ -81,8 +85,9 @@
       <section class="card">
         <h2>Dados bancários</h2>
         <div class="grid cols-3">
+          <input type="hidden" name="banco" value="001" />
           <label>Banco
-            <input type="text" name="banco" />
+            <input type="text" value="001" readonly />
           </label>
           <label>Agência
             <input type="text" name="agencia" />
@@ -100,7 +105,7 @@
             <input type="text" name="cpf" required data-mask="cpf" />
           </label>
           <label>PIS/PASEP
-            <input type="text" name="pis_pasep" />
+            <input type="text" name="pis_pasep" inputmode="numeric" maxlength="11" data-numeric-only="11" />
           </label>
           <label>RG
             <input type="text" name="rg_numero" />
@@ -128,9 +133,6 @@
           </label>
           <label>Categoria CNH
             <input type="text" name="cnh_categoria" />
-          </label>
-          <label>Categoria CNH (outros dados)
-            <input type="text" name="cnh_categoria_outros" />
           </label>
           <label>Órgão emissor CNH
             <input type="text" name="orgao_emissor_cnh" />
@@ -209,13 +211,13 @@
             </select>
           </label>
           <label>Grau de parentesco
-            <input type="text" name="conjuge_grau_parentesco" value="CÔNJUGE" />
+            <select name="conjuge_grau_parentesco" id="conjugeGrauParentescoSelect" data-options-source="conjuge_grau_parentesco">
+              <option value="">Selecione</option>
+            </select>
           </label>
           <label>Dependente para IR
-            <select name="conjuge_ir">
-              <option value=""></option>
-              <option>SIM</option>
-              <option>NÃO</option>
+            <select name="conjuge_ir" id="conjugeIrSelect" data-options-source="conjuge_ir">
+              <option value="">Selecione</option>
             </select>
           </label>
           <label class="span-2">Local de nascimento
@@ -227,6 +229,12 @@
           <label>Data de casamento
             <input type="text" name="conjuge_data_casamento" placeholder="dd/mm/aaaa" data-mask="date" />
           </label>
+          <label class="span-2">Nome da mãe
+            <input type="text" name="conjuge_nome_mae" />
+          </label>
+          <label class="span-2">Nome do pai
+            <input type="text" name="conjuge_nome_pai" />
+          </label>
         </div>
       </section>
 
@@ -234,13 +242,12 @@
         <div class="section-header">
           <div>
             <h2>Dependentes filhos(as) / enteados(as)</h2>
-            <p>Adicione até 5 dependentes, conforme a capacidade da planilha-base.</p>
+            <p id="dependentsHint">Adicione até 5 dependentes, conforme a capacidade da planilha-base.</p>
           </div>
           <button type="button" id="addDependentBtn" class="secondary-button">Adicionar dependente</button>
         </div>
         <div id="dependentsContainer" class="stack"></div>
       </section>
-
 
       <section class="card">
         <h2>Declaração</h2>
@@ -292,13 +299,13 @@
           </select>
         </label>
         <label>Grau de parentesco
-          <input type="text" data-field="grau_parentesco" value="FILHO(A)" />
+          <select data-field="grau_parentesco" data-options-source="dependente_grau_parentesco">
+            <option value="">Selecione</option>
+          </select>
         </label>
         <label>Dependente para IR
-          <select data-field="ir">
-            <option value=""></option>
-            <option>SIM</option>
-            <option>NÃO</option>
+          <select data-field="ir" data-options-source="dependente_ir">
+            <option value="">Selecione</option>
           </select>
         </label>
         <label class="span-2">Local de nascimento
@@ -309,6 +316,12 @@
         </label>
         <label>Nº nascido vivo (DNV)
           <input type="text" data-field="dnv" />
+        </label>
+        <label class="span-2">Nome da mãe
+          <input type="text" data-field="nome_mae" />
+        </label>
+        <label class="span-2">Nome do pai
+          <input type="text" data-field="nome_pai" />
         </label>
       </div>
       <div class="checkbox-row">
