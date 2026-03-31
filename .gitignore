@@ -6,4 +6,5 @@ data/
 
 templates/*.xlsx
 templates/*.xls
-!templates/.gitkeep
+!templates/README.md
+!templates/FOR.CRC.GRH.007. Solicitação de Cadastro e Admissão - SCA.xlsx
