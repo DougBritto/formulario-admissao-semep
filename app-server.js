@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const express = require('express');
-const { createConfig } = require('./lib/config');
+const { createConfig, resolveOperation } = require('./lib/config');
 const { validatePayloadDetailed } = require('./lib/validation');
 const { buildWorkbookBuffer, buildOutputFilename } = require('./lib/excel');
 const { sendInternalEmail, sendCollaboratorConfirmation } = require('./lib/email');
@@ -23,6 +23,21 @@ function requestMeta(req, extra = {}) {
   };
 }
 
+function getRequestedOperation(req) {
+  return req.params?.operacao || req.query?.operacao || '';
+}
+
+function resolveRequestConfig(req, config) {
+  return resolveOperation(config, getRequestedOperation(req));
+}
+
+function sendUnknownOperation(res, req, resolvedOperation) {
+  return res.status(404).json({
+    requestId: req.requestId,
+    error: `Operação não configurada: ${resolvedOperation.requestedKey}.`
+  });
+}
+
 function createApp(config = createConfig(), overrides = {}) {
   const app = express();
   const logger = overrides.logger || createLogger('http');
@@ -38,43 +53,63 @@ function createApp(config = createConfig(), overrides = {}) {
   app.use(createCorsMiddleware(config.allowedOrigins));
   app.use(createNoStoreMiddleware());
   app.use(express.json({ limit: '2mb' }));
+
+  app.get('/op/:operacao', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  });
+
   app.use(express.static(path.join(__dirname, 'public')));
 
   app.get('/health', (req, res) => {
-    const templateFound = fs.existsSync(config.templatePath);
+    const runtimeConfig = resolveRequestConfig(req, config);
+    if (!runtimeConfig.isKnown) {
+      return sendUnknownOperation(res, req, runtimeConfig);
+    }
+
+    const templateFound = fs.existsSync(runtimeConfig.templatePath);
 
     return res.json({
-      status: templateFound && config.emailConfigured ? 'ok' : 'degraded',
+      status: templateFound && runtimeConfig.emailConfigured ? 'ok' : 'degraded',
       time: new Date().toISOString(),
       requestId: req.requestId,
       templateFound,
-      emailConfigured: config.emailConfigured,
-      emailProvider: config.emailProvider
+      emailConfigured: runtimeConfig.emailConfigured,
+      emailProvider: runtimeConfig.emailProvider,
+      operationKey: runtimeConfig.operationKey,
+      operationLabel: runtimeConfig.operationLabel
     });
   });
 
   app.get('/api/config', (req, res) => {
-    const templateFound = fs.existsSync(config.templatePath);
+    const runtimeConfig = resolveRequestConfig(req, config);
+    if (!runtimeConfig.isKnown) {
+      return sendUnknownOperation(res, req, runtimeConfig);
+    }
+
+    const templateFound = fs.existsSync(runtimeConfig.templatePath);
 
     logger.info(
       'config_requested',
       requestMeta(req, {
+        operationKey: runtimeConfig.operationKey,
         templateFound,
-        emailConfigured: config.emailConfigured
+        emailConfigured: runtimeConfig.emailConfigured
       })
     );
 
     res.json({
       requestId: req.requestId,
-      templateFilename: config.templateFilename,
+      templateFilename: runtimeConfig.templateFilename,
       templateFound,
-      maxDependentes: config.maxDependentes,
-      emailConfigured: config.emailConfigured,
-      emailDestinationLabel: config.emailDestinationLabel,
-      emailProvider: config.emailProvider,
-      confirmationEnabled: config.confirmationEnabled,
-      formOptions: config.formOptions,
-      validationConfig: config.validationConfig
+      maxDependentes: runtimeConfig.maxDependentes,
+      emailConfigured: runtimeConfig.emailConfigured,
+      emailDestinationLabel: runtimeConfig.emailDestinationLabel,
+      emailProvider: runtimeConfig.emailProvider,
+      confirmationEnabled: runtimeConfig.confirmationEnabled,
+      formOptions: runtimeConfig.formOptions,
+      validationConfig: runtimeConfig.validationConfig,
+      operationKey: runtimeConfig.operationKey,
+      operationLabel: runtimeConfig.operationLabel
     });
   });
 
@@ -86,72 +121,83 @@ function createApp(config = createConfig(), overrides = {}) {
       keyPrefix: 'generate'
     }),
     async (req, res) => {
+      const runtimeConfig = resolveRequestConfig(req, config);
+      if (!runtimeConfig.isKnown) {
+        return sendUnknownOperation(res, req, runtimeConfig);
+      }
+
       try {
         logger.info(
           'submission_received',
           requestMeta(req, {
+            operationKey: runtimeConfig.operationKey,
             hasDependentes: Array.isArray(req.body?.dependentes) && req.body.dependentes.length > 0
           })
         );
         await recordSubmissionEvent(
-          config.auditFilePath,
+          runtimeConfig.auditFilePath,
           'received',
           req.body || {},
           {
             requestId: req.requestId,
-            emailDeliveryMode: config.emailDeliveryMode
+            operationKey: runtimeConfig.operationKey,
+            emailDeliveryMode: runtimeConfig.emailDeliveryMode
           },
           {
-            retentionDays: config.auditRetentionDays
+            retentionDays: runtimeConfig.auditRetentionDays
           }
         );
 
-        if (!fs.existsSync(config.templatePath)) {
+        if (!fs.existsSync(runtimeConfig.templatePath)) {
           logger.warn(
             'template_missing',
             requestMeta(req, {
-              templateFilename: config.templateFilename
+              operationKey: runtimeConfig.operationKey,
+              templateFilename: runtimeConfig.templateFilename
             })
           );
           await recordSubmissionEvent(
-            config.auditFilePath,
+            runtimeConfig.auditFilePath,
             'rejected',
             req.body || {},
             {
               requestId: req.requestId,
+              operationKey: runtimeConfig.operationKey,
               reason: 'template_missing'
             },
             {
-              retentionDays: config.auditRetentionDays
+              retentionDays: runtimeConfig.auditRetentionDays
             }
           );
 
           return res.status(400).json({
             requestId: req.requestId,
-            error: `Template não encontrado. Coloque o arquivo ${config.templateFilename} em ${config.templateDir}.`
+            error: `Template não encontrado. Coloque o arquivo ${runtimeConfig.templateFilename} em ${runtimeConfig.templateDir}.`
           });
         }
 
         const payload = req.body || {};
-        const validationResult = validatePayloadDetailed(payload, config);
+        const validationResult = validatePayloadDetailed(payload, runtimeConfig);
         if (!validationResult.isValid) {
           logger.warn(
             'submission_rejected',
             requestMeta(req, {
+              operationKey: runtimeConfig.operationKey,
               reason: validationResult.message,
               fieldErrors: validationResult.fieldErrors
             })
           );
           await recordSubmissionEvent(
-            config.auditFilePath,
+            runtimeConfig.auditFilePath,
             'rejected',
             payload,
             {
               requestId: req.requestId,
+              operationKey: runtimeConfig.operationKey,
               reason: validationResult.message
             },
             {
-              retentionDays: config.auditRetentionDays
+              retentionDays: runtimeConfig.auditRetentionDays
             }
           );
 
@@ -162,38 +208,41 @@ function createApp(config = createConfig(), overrides = {}) {
           });
         }
 
-        const fileBuffer = await workbookBuilder(payload, config);
+        const fileBuffer = await workbookBuilder(payload, runtimeConfig);
         const filename = outputFilenameBuilder(payload.nome);
 
-        logger.info('workbook_generated', requestMeta(req));
+        logger.info('workbook_generated', requestMeta(req, { operationKey: runtimeConfig.operationKey }));
 
-        await internalEmailSender({ payload, fileBuffer, filename, config });
+        await internalEmailSender({ payload, fileBuffer, filename, config: runtimeConfig });
         logger.info(
           'internal_email_sent',
           requestMeta(req, {
-            emailTo: config.emailDestinationLabel
+            operationKey: runtimeConfig.operationKey,
+            emailTo: runtimeConfig.emailDestinationLabel
           })
         );
 
-        await collaboratorConfirmationSender(payload, config);
+        await collaboratorConfirmationSender(payload, runtimeConfig);
         logger.info(
           'confirmation_processed',
           requestMeta(req, {
-            confirmationEnabled: config.confirmationEnabled,
+            operationKey: runtimeConfig.operationKey,
+            confirmationEnabled: runtimeConfig.confirmationEnabled,
             recipient: maskEmailForDisplay(payload.email || '')
           })
         );
         await recordSubmissionEvent(
-          config.auditFilePath,
+          runtimeConfig.auditFilePath,
           'succeeded',
           payload,
           {
             requestId: req.requestId,
-            emailDeliveryMode: config.emailDeliveryMode,
-            confirmationSent: config.confirmationEnabled && Boolean(payload.email)
+            operationKey: runtimeConfig.operationKey,
+            emailDeliveryMode: runtimeConfig.emailDeliveryMode,
+            confirmationSent: runtimeConfig.confirmationEnabled && Boolean(payload.email)
           },
           {
-            retentionDays: config.auditRetentionDays
+            retentionDays: runtimeConfig.auditRetentionDays
           }
         );
 
@@ -201,26 +250,30 @@ function createApp(config = createConfig(), overrides = {}) {
           requestId: req.requestId,
           success: true,
           message: 'Formulário enviado com sucesso. Os dados foram encaminhados para tratamento interno.',
-          emailDestinationLabel: config.emailDestinationLabel,
-          confirmationSent: config.confirmationEnabled && Boolean(payload.email)
+          emailDestinationLabel: runtimeConfig.emailDestinationLabel,
+          confirmationSent: runtimeConfig.confirmationEnabled && Boolean(payload.email),
+          operationKey: runtimeConfig.operationKey,
+          operationLabel: runtimeConfig.operationLabel
         });
       } catch (error) {
         logger.error(
           'submission_failed',
           requestMeta(req, {
+            operationKey: runtimeConfig.operationKey,
             message: error.message
           })
         );
         await recordSubmissionEvent(
-          config.auditFilePath,
+          runtimeConfig.auditFilePath,
           'failed',
           req.body || {},
           {
             requestId: req.requestId,
+            operationKey: runtimeConfig.operationKey,
             message: error.message
           },
           {
-            retentionDays: config.auditRetentionDays
+            retentionDays: runtimeConfig.auditRetentionDays
           }
         );
 

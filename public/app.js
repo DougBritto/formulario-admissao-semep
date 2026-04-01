@@ -12,6 +12,7 @@ const grauInstrucaoSelect = document.getElementById('grauInstrucaoSelect');
 const racaSelect = document.getElementById('racaSelect');
 const conjugeGrauParentescoSelect = document.getElementById('conjugeGrauParentescoSelect');
 const conjugeIrSelect = document.getElementById('conjugeIrSelect');
+const operationStatus = document.getElementById('operationStatus');
 
 let maxDependentes = 5;
 let formOptions = {
@@ -26,6 +27,20 @@ let validationConfig = {
   numericRanges: {},
   fieldMessages: {}
 };
+let activeOperation = '';
+
+function getActiveOperation() {
+  const match = window.location.pathname.match(/^\/op\/([^/]+)$/i);
+  return match ? decodeURIComponent(match[1]).trim().toLowerCase() : '';
+}
+
+function buildApiUrl(path) {
+  const url = new URL(path, window.location.origin);
+  if (activeOperation) {
+    url.searchParams.set('operacao', activeOperation);
+  }
+  return url.toString();
+}
 
 function setFeedback(message = '', type = '') {
   feedback.textContent = message;
@@ -597,8 +612,12 @@ function validateFormPayload(payload) {
 
 async function fetchConfig() {
   try {
-    const response = await fetch('/api/config');
+    const response = await fetch(buildApiUrl('/api/config'));
     const config = await response.json();
+
+    if (!response.ok) {
+      throw new Error(config.error || 'Não foi possível carregar a configuração da operação.');
+    }
 
     maxDependentes = Number(config.maxDependentes) || 5;
     formOptions = config.formOptions || formOptions;
@@ -616,11 +635,17 @@ async function fetchConfig() {
       : `Ausente: ${config.templateFilename}`;
     templateStatus.style.color = config.templateFound && config.emailConfigured ? '#027a48' : '#b42318';
     emailTarget.textContent = config.emailDestinationLabel || (config.emailConfigured ? 'configurado' : '-');
+    operationStatus.textContent = config.operationLabel
+      ? `Operação: ${config.operationLabel}`
+      : 'Operação padrão';
     refreshDependentIndexes();
   } catch (error) {
     templateStatus.textContent = 'Não foi possível validar o template.';
     templateStatus.style.color = '#b42318';
     emailTarget.textContent = '-';
+    operationStatus.textContent = activeOperation
+      ? `OperaÃ§Ã£o invÃ¡lida: ${activeOperation}`
+      : 'OperaÃ§Ã£o padrÃ£o';
   }
 }
 
@@ -639,7 +664,7 @@ async function handleSubmit(event) {
       throw new Error('Revise os campos destacados.');
     }
 
-    const response = await fetch('/api/generate', {
+    const response = await fetch(buildApiUrl('/api/generate'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -681,5 +706,6 @@ form.addEventListener('submit', handleSubmit);
 applyMasks();
 initializeFieldHelpers();
 updateDependentsHint();
+activeOperation = getActiveOperation();
 fetchConfig();
 refreshDependentIndexes();

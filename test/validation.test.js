@@ -346,6 +346,55 @@ test('GET /api/config returns runtime configuration', async () => {
   }
 });
 
+test('GET /api/config returns operation-specific destination when operation is informed', async () => {
+  const config = makeConfig({
+    auditFilePath: makeAuditFilePath()
+  });
+  const app = createApp(config, {
+    logger: { info() {}, warn() {}, error() {} }
+  });
+  const server = http.createServer(app);
+
+  await new Promise((resolve) => server.listen(0, resolve));
+  const { port } = server.address();
+
+  try {
+    const response = await fetch(`http://127.0.0.1:${port}/api/config?operacao=crc`);
+    const data = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(data.operationKey, 'crc');
+    assert.equal(data.operationLabel, 'CRC');
+    assert.equal(data.emailDestinationLabel, 'rh****@example.com');
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test('GET /api/config rejects unknown operation', async () => {
+  const config = makeConfig({
+    auditFilePath: makeAuditFilePath()
+  });
+  const app = createApp(config, {
+    logger: { info() {}, warn() {}, error() {} }
+  });
+  const server = http.createServer(app);
+
+  await new Promise((resolve) => server.listen(0, resolve));
+  const { port } = server.address();
+
+  try {
+    const response = await fetch(`http://127.0.0.1:${port}/api/config?operacao=inexistente`);
+    const data = await response.json();
+
+    assert.equal(response.status, 404);
+    assert.ok(data.requestId);
+    assert.equal(data.error, 'Operação não configurada: inexistente.');
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 test('POST /api/generate returns success with injected services and writes audit log', async () => {
   const auditFilePath = makeAuditFilePath();
   const config = makeConfig({
@@ -394,6 +443,45 @@ test('POST /api/generate returns success with injected services and writes audit
     assert.ok(auditLog[0].meta.requestId);
     assert.equal(auditLog[0].payload.email, 'ma***@example.com');
     assert.equal(auditLog[0].payload.cpf, '***.725-25');
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test('POST /api/generate uses operation default destination', async () => {
+  const auditFilePath = makeAuditFilePath();
+  const config = makeConfig({
+    auditFilePath
+  });
+  let capturedEmailTo = '';
+
+  const app = createApp(config, {
+    logger: { info() {}, warn() {}, error() {} },
+    buildWorkbookBuffer: async () => Buffer.from('arquivo'),
+    buildOutputFilename: () => 'SCA_MARIA_DA_SILVA_2026-03-31.xlsx',
+    sendInternalEmail: async ({ config: runtimeConfig }) => {
+      capturedEmailTo = runtimeConfig.emailTo;
+    },
+    sendCollaboratorConfirmation: async () => null
+  });
+
+  const server = http.createServer(app);
+  await new Promise((resolve) => server.listen(0, resolve));
+  const { port } = server.address();
+
+  try {
+    const response = await fetch(`http://127.0.0.1:${port}/api/generate?operacao=crc`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(makePayload())
+    });
+    const data = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(capturedEmailTo, 'rh-crc@example.com');
+    assert.equal(data.operationKey, 'crc');
+    assert.equal(data.operationLabel, 'CRC');
+    assert.equal(data.emailDestinationLabel, 'rh****@example.com');
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }

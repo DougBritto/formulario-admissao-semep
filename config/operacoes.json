@@ -1,0 +1,30 @@
+{
+  "anglo": {
+    "label": "Anglo",
+    "emailTo": "rh-anglo@example.com"
+  },
+  "crc": {
+    "label": "CRC",
+    "emailTo": "rh-crc@example.com"
+  },
+  "amg": {
+    "label": "AMG",
+    "emailTo": "rh-amg@example.com"
+  },
+  "arcelor": {
+    "label": "Arcelor",
+    "emailTo": "rh-arcelor@example.com"
+  },
+  "cda": {
+    "label": "CDA",
+    "emailTo": "rh-cda@example.com"
+  },
+  "vale-vargemgrande": {
+    "label": "Vale VargemGrande",
+    "emailTo": "rh-vale-vargemgrande@example.com"
+  },
+  "samarco": {
+    "label": "Samarco",
+    "emailTo": "rh-samarco@example.com"
+  }
+}
