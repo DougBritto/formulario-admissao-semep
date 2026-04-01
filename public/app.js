@@ -122,6 +122,12 @@ function applyMask(value, type) {
       .replace(/(\d{5})(\d{1,4})$/, '$1-$2');
   }
 
+  if (type === 'cellphone') {
+    return digits
+      .slice(0, 9)
+      .replace(/(\d{5})(\d{1,4})$/, '$1-$2');
+  }
+
   if (type === 'date') {
     return digits
       .slice(0, 8)
@@ -141,6 +147,12 @@ function padPisPasep(value) {
   const digits = digitsOnly(value);
   if (!digits) return '';
   return digits.slice(0, 11).padStart(11, '0');
+}
+
+function padContaPagto(value) {
+  const digits = digitsOnly(value);
+  if (!digits) return '';
+  return digits.slice(0, 12).padStart(12, '0');
 }
 
 function fillSelectOptions(selectElement, options, formatter = (option) => option) {
@@ -267,6 +279,12 @@ function applyMasks(root = document) {
       event.target.value = padPisPasep(event.target.value);
     });
   });
+
+  root.querySelectorAll('input[name="conta_pagto"]').forEach((input) => {
+    input.addEventListener('blur', (event) => {
+      event.target.value = padContaPagto(event.target.value);
+    });
+  });
 }
 
 function initializeFieldHelpers(root = document) {
@@ -335,6 +353,8 @@ function serializeForm() {
   const payload = Object.fromEntries(formData.entries());
   payload.banco = '001';
   payload.cnh_categoria_outros = payload.cnh_categoria || '';
+  payload.conjuge_plano_saude = form.querySelector('[name="conjuge_plano_saude"]')?.checked || false;
+  payload.conjuge_plano_odonto = form.querySelector('[name="conjuge_plano_odonto"]')?.checked || false;
   payload.dependentes = serializeDependents();
   return payload;
 }
@@ -365,6 +385,20 @@ function validateMaxLengths(payload, fieldErrors, prefix = '') {
 function validateFormPayload(payload) {
   const fieldErrors = {};
   const messages = validationConfig.fieldMessages;
+  const duplicateCpfMap = new Map();
+
+  function registerCpf(key, value) {
+    const digits = digitsOnly(value);
+    if (digits.length !== 11) return;
+
+    if (duplicateCpfMap.has(digits)) {
+      setValidationError(fieldErrors, key, messages.duplicateCpf);
+      setValidationError(fieldErrors, duplicateCpfMap.get(digits), messages.duplicateCpf);
+      return;
+    }
+
+    duplicateCpfMap.set(digits, key);
+  }
 
   validateRequiredFields(payload, fieldErrors);
 
@@ -372,7 +406,10 @@ function validateFormPayload(payload) {
     setValidationError(fieldErrors, 'email', messages.invalidEmail);
   }
 
-  if (payload.grau_instrucao && !(formOptions.grau_instrucao || []).includes(payload.grau_instrucao)) {
+  if (
+    payload.grau_instrucao &&
+    !(formOptions.grau_instrucao || []).some((option) => option.value === payload.grau_instrucao)
+  ) {
     setValidationError(fieldErrors, 'grau_instrucao', messages.invalidEducation);
   }
 
@@ -393,6 +430,10 @@ function validateFormPayload(payload) {
     setValidationError(fieldErrors, 'conjuge_ir', messages.invalidSpouseIr);
   }
 
+  if ((payload.conjuge_plano_saude || payload.conjuge_plano_odonto) && !String(payload.conjuge_nome_mae || '').trim()) {
+    setValidationError(fieldErrors, 'conjuge_nome_mae', messages.invalidSpouseMotherForPlan);
+  }
+
   if (payload.cpf && !isValidCpf(payload.cpf)) {
     setValidationError(fieldErrors, 'cpf', messages.invalidCpf);
   }
@@ -400,6 +441,9 @@ function validateFormPayload(payload) {
   if (payload.conjuge_cpf && !isValidCpf(payload.conjuge_cpf)) {
     setValidationError(fieldErrors, 'conjuge_cpf', messages.invalidSpouseCpf);
   }
+
+  registerCpf('cpf', payload.cpf);
+  registerCpf('conjuge_cpf', payload.conjuge_cpf);
 
   if (payload.pis_pasep && !isValidPisPasep(payload.pis_pasep)) {
     setValidationError(fieldErrors, 'pis_pasep', messages.invalidPisPasep);
@@ -452,6 +496,10 @@ function validateFormPayload(payload) {
       setValidationError(fieldErrors, `${prefix}nome`, messages.invalidDependentName);
     }
 
+    if ((dependente.plano_saude || dependente.plano_odonto) && !String(dependente.nome_mae || '').trim()) {
+      setValidationError(fieldErrors, `${prefix}nome_mae`, messages.invalidDependentMotherForPlan);
+    }
+
     if (!isValidCalendarDate(dependente.data_nascimento)) {
       setValidationError(
         fieldErrors,
@@ -463,6 +511,8 @@ function validateFormPayload(payload) {
     if (dependente.cpf && !isValidCpf(dependente.cpf)) {
       setValidationError(fieldErrors, `${prefix}cpf`, messages.invalidDependentCpf);
     }
+
+    registerCpf(`${prefix}cpf`, dependente.cpf);
 
     if (
       dependente.grau_parentesco &&
@@ -504,10 +554,7 @@ async function fetchConfig() {
     validationConfig = config.validationConfig || validationConfig;
 
     updateDependentsHint();
-    fillSelectOptions(grauInstrucaoSelect, formOptions.grau_instrucao || [], (option) => ({
-      value: option,
-      label: option
-    }));
+    fillSelectOptions(grauInstrucaoSelect, formOptions.grau_instrucao || [], (option) => option);
     fillSelectOptions(racaSelect, formOptions.raca || [], (option) => option);
     fillSelectOptions(conjugeGrauParentescoSelect, formOptions.conjuge_grau_parentesco || [], (option) => option);
     fillSelectOptions(conjugeIrSelect, formOptions.conjuge_ir || [], (option) => option);
@@ -517,7 +564,7 @@ async function fetchConfig() {
       ? `Template OK | E-mail ${config.emailProvider}/${config.emailConfigured ? 'OK' : 'pendente'}`
       : `Ausente: ${config.templateFilename}`;
     templateStatus.style.color = config.templateFound && config.emailConfigured ? '#027a48' : '#b42318';
-    emailTarget.textContent = config.emailTo || '-';
+    emailTarget.textContent = config.emailDestinationLabel || (config.emailConfigured ? 'configurado' : '-');
     refreshDependentIndexes();
   } catch (error) {
     templateStatus.textContent = 'Não foi possível validar o template.';

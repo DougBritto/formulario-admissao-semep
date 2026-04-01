@@ -3,6 +3,9 @@ node_modules/
 output/
 data/
 *.log
+playwright-report/
+test-results/
+.playwright/
 
 templates/*.xlsx
 templates/*.xls

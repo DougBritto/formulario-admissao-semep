@@ -212,6 +212,13 @@ button[type="submit"]:hover {
   width: auto;
 }
 
+.section-note {
+  margin-top: 12px;
+  margin-bottom: 0;
+  color: #475467;
+  font-size: 0.95rem;
+}
+
 @media (max-width: 900px) {
   .page-header,
   .actions,

@@ -36,19 +36,18 @@
           <label>Sexo
             <select name="sexo_funcionario" required>
               <option value="">Selecione</option>
-              <option>MASCULINO</option>
-              <option>FEMININO</option>
+              <option value="M">Masculino</option>
+              <option value="F">Feminino</option>
             </select>
           </label>
           <label>Estado civil
             <select name="estado_civil" required>
               <option value="">Selecione</option>
-              <option>SOLTEIRO(A)</option>
-              <option>CASADO(A)</option>
-              <option>DIVORCIADO(A)</option>
-              <option>SEPARADO(A)</option>
-              <option>VIÚVO(A)</option>
-              <option>UNIÃO ESTÁVEL</option>
+              <option value="S">Solteiro(a)</option>
+              <option value="C">Casado(a)</option>
+              <option value="D">Divorciado(a)</option>
+              <option value="Q">Separado(a)</option>
+              <option value="V">Viúvo(a)</option>
             </select>
           </label>
           <label>Naturalidade
@@ -96,7 +95,7 @@
             <input type="text" name="agencia" />
           </label>
           <label>Conta para pagamento
-            <input type="text" name="conta_pagto" />
+            <input type="text" name="conta_pagto" inputmode="numeric" maxlength="12" data-numeric-only="12" placeholder="000012345678" />
           </label>
         </div>
       </section>
@@ -105,7 +104,7 @@
         <h2>Documentos</h2>
         <div class="grid cols-4">
           <label>CPF
-            <input type="text" name="cpf" required data-mask="cpf" />
+            <input type="text" name="cpf" required inputmode="numeric" maxlength="11" data-numeric-only="11" />
           </label>
           <label>PIS/PASEP
             <input type="text" name="pis_pasep" inputmode="numeric" maxlength="11" data-numeric-only="11" />
@@ -132,7 +131,7 @@
             <input type="text" name="ctps_data_emissao" placeholder="dd/mm/aaaa" data-mask="date" />
           </label>
           <label>Número da CNH
-            <input type="text" name="cnh_numero" />
+            <input type="text" name="cnh_numero" inputmode="numeric" maxlength="11" data-numeric-only="11" />
           </label>
           <label>Categoria CNH
             <input type="text" name="cnh_categoria" />
@@ -150,16 +149,16 @@
             <input type="text" name="cnh_uf" maxlength="2" />
           </label>
           <label>Certificado reservista
-            <input type="text" name="reservista" />
+            <input type="text" name="reservista" inputmode="numeric" data-numeric-only="30" />
           </label>
           <label>Título de eleitor
-            <input type="text" name="titulo_eleitor" />
+            <input type="text" name="titulo_eleitor" inputmode="numeric" maxlength="12" data-numeric-only="12" />
           </label>
           <label>Zona
-            <input type="text" name="titulo_zona" />
+            <input type="text" name="titulo_zona" inputmode="numeric" maxlength="4" data-numeric-only="4" />
           </label>
           <label>Seção
-            <input type="text" name="titulo_secao" />
+            <input type="text" name="titulo_secao" inputmode="numeric" maxlength="4" data-numeric-only="4" />
           </label>
         </div>
       </section>
@@ -186,13 +185,13 @@
             <input type="text" name="cidade" />
           </label>
           <label>CEP
-            <input type="text" name="cep" data-mask="cep" />
+            <input type="text" name="cep" inputmode="numeric" maxlength="8" data-numeric-only="8" />
           </label>
           <label>DDD celular
-            <input type="text" name="ddd_celular" data-mask="ddd" />
+            <input type="text" name="ddd_celular" inputmode="numeric" maxlength="2" data-numeric-only="2" />
           </label>
           <label>Celular
-            <input type="text" name="celular" required data-mask="phone" />
+            <input type="text" name="celular" required inputmode="numeric" maxlength="9" data-numeric-only="9" placeholder="999999999" />
           </label>
         </div>
       </section>
@@ -209,8 +208,8 @@
           <label>Sexo
             <select name="conjuge_sexo">
               <option value=""></option>
-              <option>MASCULINO</option>
-              <option>FEMININO</option>
+              <option value="M">Masculino</option>
+              <option value="F">Feminino</option>
             </select>
           </label>
           <label>Grau de parentesco
@@ -227,7 +226,7 @@
             <input type="text" name="conjuge_local_nascimento" />
           </label>
           <label>CPF
-            <input type="text" name="conjuge_cpf" data-mask="cpf" />
+            <input type="text" name="conjuge_cpf" inputmode="numeric" maxlength="11" data-numeric-only="11" />
           </label>
           <label>Data de casamento
             <input type="text" name="conjuge_data_casamento" placeholder="dd/mm/aaaa" data-mask="date" />
@@ -238,6 +237,11 @@
           <label class="span-2">Nome do pai
             <input type="text" name="conjuge_nome_pai" />
           </label>
+        </div>
+        <p class="section-note">Obrigatório somente para inclusão no plano de saúde e odontológico: informe o nome da mãe do cônjuge ou deixe em branco se não for incluir.</p>
+        <div class="checkbox-row">
+          <label><input type="checkbox" name="conjuge_plano_saude" /> Incluir cônjuge no plano de saúde</label>
+          <label><input type="checkbox" name="conjuge_plano_odonto" /> Incluir cônjuge no plano odontológico</label>
         </div>
       </section>
 
@@ -297,8 +301,8 @@
         <label>Sexo
           <select data-field="sexo">
             <option value=""></option>
-            <option>MASCULINO</option>
-            <option>FEMININO</option>
+            <option value="M">Masculino</option>
+            <option value="F">Feminino</option>
           </select>
         </label>
         <label>Grau de parentesco
@@ -315,7 +319,7 @@
           <input type="text" data-field="local_nascimento" />
         </label>
         <label>CPF do dependente
-          <input type="text" data-field="cpf" data-mask="cpf" />
+          <input type="text" data-field="cpf" inputmode="numeric" maxlength="11" data-numeric-only="11" />
         </label>
         <label>Nº nascido vivo (DNV)
           <input type="text" data-field="dnv" data-numeric-only="11" />
@@ -327,6 +331,7 @@
           <input type="text" data-field="nome_pai" />
         </label>
       </div>
+      <p class="section-note">Obrigatório somente para inclusão no plano de saúde e odontológico: informe o nome da mãe do dependente ou deixe em branco se não for incluir.</p>
       <div class="checkbox-row">
         <label><input type="checkbox" data-field="plano_saude" /> Incluir no plano de saúde</label>
         <label><input type="checkbox" data-field="plano_odonto" /> Incluir no plano odonto</label>

@@ -12,7 +12,7 @@ const {
   validatePayload,
   validatePayloadDetailed
 } = require('../lib/validation');
-const { buildOutputFilename } = require('../lib/excel');
+const { buildOutputFilename, buildWorkbookBuffer, transformPayload } = require('../lib/excel');
 const { createApp } = require('../app-server');
 
 function makeConfig(overrides = {}) {
@@ -38,7 +38,7 @@ function makePayload() {
     data_nascimento: '10/10/1990',
     cpf: '529.982.247-25',
     email: 'maria@example.com',
-    celular: '(11) 91234-5678',
+    celular: '91234-5678',
     dependentes: []
   };
 }
@@ -59,6 +59,24 @@ test('rejects invalid cpf', () => {
   assert.equal(validatePayload(payload, makeConfig()), 'CPF inválido.');
 });
 
+test('rejects duplicate cpf between holder, spouse and dependents', () => {
+  const payload = makePayload();
+  payload.conjuge_cpf = '529.982.247-25';
+  payload.dependentes = [
+    {
+      nome: 'Dependente Teste',
+      cpf: '529.982.247-25'
+    }
+  ];
+
+  const result = validatePayloadDetailed(payload, makeConfig());
+
+  assert.equal(result.isValid, false);
+  assert.equal(result.fieldErrors.cpf, 'CPF já informado em outro cadastro do formulário.');
+  assert.equal(result.fieldErrors.conjuge_cpf, 'CPF já informado em outro cadastro do formulário.');
+  assert.equal(result.fieldErrors['dependentes.0.cpf'], 'CPF já informado em outro cadastro do formulário.');
+});
+
 test('rejects too many dependents', () => {
   const payload = makePayload();
   payload.dependentes = new Array(6).fill({ nome: 'Filho' });
@@ -67,6 +85,41 @@ test('rejects too many dependents', () => {
 
 test('builds sanitized output filename', () => {
   assert.match(buildOutputFilename('José da Silva'), /^SCA_JOSE_DA_SILVA_\d{4}-\d{2}-\d{2}\.xlsx$/);
+});
+
+test('keeps workbook select values as official template codes', () => {
+  const transformed = transformPayload({
+    sexo_funcionario: 'MASCULINO',
+    estado_civil: 'CASADO(A)',
+    grau_instrucao: '55',
+    raca: '8',
+    conjuge_sexo: 'FEMININO',
+    conjuge_grau_parentesco: '02',
+    conjuge_ir: '3',
+    dependentes: [{ sexo: 'MASCULINO' }]
+  });
+
+  assert.equal(transformed.sexo_funcionario, 'M');
+  assert.equal(transformed.estado_civil, 'C');
+  assert.equal(transformed.grau_instrucao, '55');
+  assert.equal(transformed.raca, '8');
+  assert.equal(transformed.conjuge_sexo, 'F');
+  assert.equal(transformed.conjuge_grau_parentesco, '02');
+  assert.equal(transformed.conjuge_ir, '3');
+});
+
+test('writes full education label to workbook while keeping code in payload', async () => {
+  const config = makeConfig();
+  const payload = makePayload();
+  payload.grau_instrucao = '55';
+
+  const workbookBuffer = await buildWorkbookBuffer(payload, config);
+  const XlsxPopulate = require('xlsx-populate');
+  const workbook = await XlsxPopulate.fromDataAsync(workbookBuffer);
+  const sheet = workbook.sheet(config.sheetName);
+
+  assert.equal(transformPayload(payload).grau_instrucao, '55');
+  assert.equal(sheet.cell(config.fieldMapping.funcionario.grau_instrucao).value(), '55 SUPERIOR COMPLETO');
 });
 
 test('validates cpf check digits', () => {
@@ -145,6 +198,40 @@ test('rejects invalid spouse select options from workbook-backed lists', () => {
   assert.equal(result.fieldErrors.conjuge_ir, 'Selecione uma opção válida de IR para o cônjuge.');
 });
 
+test('requires spouse mother name when spouse is included in plans', () => {
+  const payload = makePayload();
+  payload.conjuge_nome = 'Maria da Silva';
+  payload.conjuge_plano_saude = true;
+  payload.conjuge_nome_mae = '';
+
+  const result = validatePayloadDetailed(payload, makeConfig());
+
+  assert.equal(result.isValid, false);
+  assert.equal(
+    result.fieldErrors.conjuge_nome_mae,
+    'Nome da mãe do cônjuge é obrigatório para inclusão em plano de saúde ou odontológico.'
+  );
+});
+
+test('requires dependent mother name when dependent is included in plans', () => {
+  const payload = makePayload();
+  payload.dependentes = [
+    {
+      nome: 'Dependente Teste',
+      plano_saude: true,
+      nome_mae: ''
+    }
+  ];
+
+  const result = validatePayloadDetailed(payload, makeConfig());
+
+  assert.equal(result.isValid, false);
+  assert.equal(
+    result.fieldErrors['dependentes.0.nome_mae'],
+    'Nome da mãe do dependente é obrigatório para inclusão em plano de saúde ou odontológico.'
+  );
+});
+
 test('GET /health returns runtime status', async () => {
   const config = makeConfig({
     auditFilePath: makeAuditFilePath()
@@ -186,9 +273,9 @@ test('GET /api/config returns runtime configuration', async () => {
     const data = await response.json();
 
     assert.equal(response.status, 200);
-    assert.equal(data.emailTo, 'teste@example.com');
     assert.equal(data.maxDependentes, 5);
     assert.equal(data.emailConfigured, true);
+    assert.equal(data.emailDestinationLabel, 'te***@example.com');
     assert.equal(data.emailProvider, 'resend');
     assert.ok(data.validationConfig);
   } finally {
@@ -233,6 +320,7 @@ test('POST /api/generate returns success with injected services and writes audit
     assert.equal(response.status, 200);
     assert.equal(data.success, true);
     assert.equal(data.fileName, 'SCA_MARIA_DA_SILVA_2026-03-31.xlsx');
+    assert.equal(data.emailDestinationLabel, 'te***@example.com');
     assert.equal(sent.internal, true);
     assert.equal(sent.confirmation, true);
 
@@ -245,6 +333,8 @@ test('POST /api/generate returns success with injected services and writes audit
     assert.equal(auditLog[0].type, 'received');
     assert.equal(auditLog[1].type, 'succeeded');
     assert.ok(auditLog[0].meta.requestId);
+    assert.equal(auditLog[0].payload.email, 'ma***@example.com');
+    assert.equal(auditLog[0].payload.cpf, '***.725-25');
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }

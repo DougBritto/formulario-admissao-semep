@@ -7,8 +7,10 @@ const { buildWorkbookBuffer, buildOutputFilename } = require('./lib/excel');
 const { sendInternalEmail, sendCollaboratorConfirmation } = require('./lib/email');
 const { createLogger } = require('./lib/logger');
 const { recordSubmissionEvent } = require('./lib/audit');
+const { maskEmailForDisplay } = require('./lib/redaction');
 const {
   createCorsMiddleware,
+  createNoStoreMiddleware,
   createRateLimitMiddleware,
   createRequestIdMiddleware,
   createSecurityHeadersMiddleware
@@ -30,9 +32,11 @@ function createApp(config = createConfig(), overrides = {}) {
   const collaboratorConfirmationSender = overrides.sendCollaboratorConfirmation || sendCollaboratorConfirmation;
 
   app.disable('x-powered-by');
+  app.set('trust proxy', 1);
   app.use(createRequestIdMiddleware());
   app.use(createSecurityHeadersMiddleware());
   app.use(createCorsMiddleware(config.allowedOrigins));
+  app.use(createNoStoreMiddleware());
   app.use(express.json({ limit: '2mb' }));
   app.use(express.static(path.join(__dirname, 'public')));
 
@@ -64,8 +68,8 @@ function createApp(config = createConfig(), overrides = {}) {
       templateFilename: config.templateFilename,
       templateFound,
       maxDependentes: config.maxDependentes,
-      emailTo: config.emailTo,
       emailConfigured: config.emailConfigured,
+      emailDestinationLabel: config.emailDestinationLabel,
       emailProvider: config.emailProvider,
       confirmationEnabled: config.confirmationEnabled,
       formOptions: config.formOptions,
@@ -97,7 +101,7 @@ function createApp(config = createConfig(), overrides = {}) {
           logger.warn(
             'template_missing',
             requestMeta(req, {
-              templatePath: config.templatePath
+              templateFilename: config.templateFilename
             })
           );
           await recordSubmissionEvent(config.auditFilePath, 'rejected', req.body || {}, {
@@ -145,7 +149,7 @@ function createApp(config = createConfig(), overrides = {}) {
         logger.info(
           'internal_email_sent',
           requestMeta(req, {
-            emailTo: config.emailTo,
+            emailTo: config.emailDestinationLabel,
             filename
           })
         );
@@ -155,7 +159,7 @@ function createApp(config = createConfig(), overrides = {}) {
           'confirmation_processed',
           requestMeta(req, {
             confirmationEnabled: config.confirmationEnabled,
-            recipient: payload.email || null
+            recipient: maskEmailForDisplay(payload.email || '')
           })
         );
         await recordSubmissionEvent(config.auditFilePath, 'succeeded', payload, {
@@ -167,8 +171,8 @@ function createApp(config = createConfig(), overrides = {}) {
 
         return res.json({
           success: true,
-          message: `Formulário enviado com sucesso. Os dados foram encaminhados para ${config.emailTo}.`,
-          emailTo: config.emailTo,
+          message: 'Formulário enviado com sucesso. Os dados foram encaminhados para tratamento interno.',
+          emailDestinationLabel: config.emailDestinationLabel,
           fileName: filename,
           confirmationSent: config.confirmationEnabled && Boolean(payload.email)
         });
