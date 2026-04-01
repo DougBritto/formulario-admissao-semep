@@ -8,6 +8,11 @@
     "test": "node --test",
     "generate:automation-workbook": "node scripts/generate-automation-workbook.js",
     "test:e2e": "playwright test",
+    "test:e2e:full": "playwright test",
+    "test:e2e:local": "playwright test",
+    "test:e2e:full:local": "playwright test",
+    "test:e2e:prod": "node -e \"const { spawnSync } = require('node:child_process'); const command = process.platform === 'win32' ? 'npx.cmd' : 'npx'; const env = { ...process.env, PLAYWRIGHT_BASE_URL: 'https://formulario-admissao-semep.onrender.com', PLAYWRIGHT_SKIP_WEBSERVER: 'true' }; const result = spawnSync(command, ['playwright', 'test'], { stdio: 'inherit', env }); process.exit(result.status ?? 1);\"",
+    "test:e2e:full:prod": "node -e \"const { spawnSync } = require('node:child_process'); const command = process.platform === 'win32' ? 'npx.cmd' : 'npx'; const env = { ...process.env, PLAYWRIGHT_BASE_URL: 'https://formulario-admissao-semep.onrender.com', PLAYWRIGHT_SKIP_WEBSERVER: 'true' }; const result = spawnSync(command, ['playwright', 'test'], { stdio: 'inherit', env }); process.exit(result.status ?? 1);\"",
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:ui": "playwright test --ui"
   },
