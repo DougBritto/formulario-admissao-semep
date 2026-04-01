@@ -174,6 +174,28 @@ test('bloqueia dependente em plano sem nome da mãe', async ({ page }) => {
   await expect(page.locator('#feedback')).toContainText('Revise os campos destacados.');
 });
 
+test('bloqueia dependente sem dnv quando nasceu a partir de fevereiro de 2010', async ({ page }) => {
+  const payload = {
+    ...admissionPayload,
+    conjuge_cpf: '11144477735'
+  };
+  const dependente = {
+    ...payload.dependentes[0],
+    dnv: ''
+  };
+
+  await fillBaseForm(page, payload);
+  await addDependent(page, dependente);
+  await page.locator('input[name="declaracao_veracidade"]').check();
+  await page.locator('#submitBtn').click();
+
+  const dependentCard = page.locator('.dependent-card').first();
+  await expect(fieldErrorLocator(dependentCard, '[data-field="dnv"]')).toContainText(
+    'DNV do dependente é obrigatório para nascidos a partir de fevereiro de 2010.'
+  );
+  await expect(page.locator('#feedback')).toContainText('Revise os campos destacados.');
+});
+
 test('bloqueia CPF duplicado entre titular, cônjuge e dependente', async ({ page }) => {
   const payload = {
     ...admissionPayload,

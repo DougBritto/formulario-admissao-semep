@@ -77,6 +77,21 @@ function isValidUf(value) {
   return /^[A-Za-z]{2}$/.test(String(value || '').trim());
 }
 
+function normalizeIssuerWithUf(value) {
+  return String(value || '')
+    .trim()
+    .toUpperCase()
+    .replace(/\s*\/\s*/g, '/')
+    .replace(/\s+/g, ' ');
+}
+
+function isValidIssuerWithUf(value) {
+  const normalized = normalizeIssuerWithUf(value);
+  if (!normalized) return true;
+
+  return /^[A-Z]{2,10}(?:[ .-][A-Z]{2,10})*\/[A-Z]{2}$/.test(normalized);
+}
+
 function isValidCalendarDate(value) {
   const text = String(value || '').trim();
   if (!text) return true;
@@ -94,6 +109,28 @@ function isValidCalendarDate(value) {
     date.getMonth() === month - 1 &&
     date.getDate() === day
   );
+}
+
+function requiresDnvByBirthDate(value) {
+  const text = String(value || '').trim();
+  const match = text.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (!match) return false;
+
+  const day = Number(match[1]);
+  const month = Number(match[2]);
+  const year = Number(match[3]);
+  const date = new Date(year, month - 1, day);
+
+  if (
+    date.getFullYear() !== year ||
+    date.getMonth() !== month - 1 ||
+    date.getDate() !== day
+  ) {
+    return false;
+  }
+
+  const cutoff = new Date(2010, 1, 1);
+  return date >= cutoff;
 }
 
 function applyMask(value, type) {
@@ -285,6 +322,12 @@ function applyMasks(root = document) {
       event.target.value = padContaPagto(event.target.value);
     });
   });
+
+  root.querySelectorAll('input[name="orgao_emissor_rg"]').forEach((input) => {
+    input.addEventListener('blur', (event) => {
+      event.target.value = normalizeIssuerWithUf(event.target.value);
+    });
+  });
 }
 
 function initializeFieldHelpers(root = document) {
@@ -449,6 +492,10 @@ function validateFormPayload(payload) {
     setValidationError(fieldErrors, 'pis_pasep', messages.invalidPisPasep);
   }
 
+  if (payload.orgao_emissor_rg && !isValidIssuerWithUf(payload.orgao_emissor_rg)) {
+    setValidationError(fieldErrors, 'orgao_emissor_rg', messages.invalidRgIssuerWithUf);
+  }
+
   Object.entries(validationConfig.numericLengths).forEach(([key, rule]) => {
     if (!payload[key]) return;
     if (digitsOnly(payload[key]).length !== rule.exactLength) {
@@ -513,6 +560,10 @@ function validateFormPayload(payload) {
     }
 
     registerCpf(`${prefix}cpf`, dependente.cpf);
+
+    if (requiresDnvByBirthDate(dependente.data_nascimento) && !digitsOnly(dependente.dnv)) {
+      setValidationError(fieldErrors, `${prefix}dnv`, messages.invalidDependentDnvRequired);
+    }
 
     if (
       dependente.grau_parentesco &&

@@ -6,6 +6,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { createConfig } = require('../lib/config');
 const {
+  FIELD_MESSAGES,
   isValidCalendarDate,
   isValidCpf,
   isValidPisPasep,
@@ -145,6 +146,7 @@ test('returns field errors map for invalid payload', () => {
   payload.cpf = '123';
   payload.cep = '123';
   payload.pis_pasep = '120.44561.50-3';
+  payload.orgao_emissor_rg = 'SSP';
 
   const result = validatePayloadDetailed(payload, makeConfig());
 
@@ -154,6 +156,10 @@ test('returns field errors map for invalid payload', () => {
   assert.equal(
     result.fieldErrors.pis_pasep,
     'PIS/PASEP deve conter 11 números, sem pontos ou caracteres especiais.'
+  );
+  assert.equal(
+    result.fieldErrors.orgao_emissor_rg,
+    'Órgão emissor do RG deve ser informado no formato ÓRGÃO/UF, por exemplo: SSP/MG.'
   );
 });
 
@@ -229,6 +235,25 @@ test('requires dependent mother name when dependent is included in plans', () =>
   assert.equal(
     result.fieldErrors['dependentes.0.nome_mae'],
     'Nome da mãe do dependente é obrigatório para inclusão em plano de saúde ou odontológico.'
+  );
+});
+
+test('requires dependent dnv for births from february 2010 onward', () => {
+  const payload = makePayload();
+  payload.dependentes = [
+    {
+      nome: 'Dependente Teste',
+      data_nascimento: '01/02/2010',
+      dnv: ''
+    }
+  ];
+
+  const result = validatePayloadDetailed(payload, makeConfig());
+
+  assert.equal(result.isValid, false);
+  assert.equal(
+    result.fieldErrors['dependentes.0.dnv'],
+    FIELD_MESSAGES.invalidDependentDnvRequired
   );
 });
 
