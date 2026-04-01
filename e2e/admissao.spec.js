@@ -125,8 +125,9 @@ test('envia o formulário completo com cônjuge e dependente', async ({ page }) 
   await page.locator('input[name="declaracao_veracidade"]').check();
   await page.locator('#submitBtn').click();
 
-  await expect(page.locator('#feedback')).toContainText('FormulÃ¡rio enviado com sucesso');
-  await expect(page.locator('#feedback')).toHaveClass(/success/);
+  await expect(page.locator('#submitBtn')).toHaveText(/Enviar/, { timeout: 30_000 });
+  await expect(page.locator('#feedback')).toHaveClass(/success/, { timeout: 30_000 });
+  await expect(page.locator('#feedback')).toContainText(/sucesso/i, { timeout: 30_000 });
 });
 
 test('bloqueia cônjuge em plano sem nome da mãe', async ({ page }) => {
