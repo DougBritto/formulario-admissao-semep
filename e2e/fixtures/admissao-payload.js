@@ -18,7 +18,7 @@ const admissionPayload = {
   pis_pasep: '00000005621',
   rg_numero: 'MG1234567',
   rg_data_emissao: '01/01/2015',
-  orgao_emissor_rg: 'SSP',
+  orgao_emissor_rg: 'SSP/MG',
   ctps_numero: '123456',
   ctps_serie: '001',
   ctps_uf: 'MG',

@@ -65,6 +65,7 @@ function createApp(config = createConfig(), overrides = {}) {
     );
 
     res.json({
+      requestId: req.requestId,
       templateFilename: config.templateFilename,
       templateFound,
       maxDependentes: config.maxDependentes,
@@ -92,10 +93,18 @@ function createApp(config = createConfig(), overrides = {}) {
             hasDependentes: Array.isArray(req.body?.dependentes) && req.body.dependentes.length > 0
           })
         );
-        await recordSubmissionEvent(config.auditFilePath, 'received', req.body || {}, {
-          requestId: req.requestId,
-          emailDeliveryMode: config.emailDeliveryMode
-        });
+        await recordSubmissionEvent(
+          config.auditFilePath,
+          'received',
+          req.body || {},
+          {
+            requestId: req.requestId,
+            emailDeliveryMode: config.emailDeliveryMode
+          },
+          {
+            retentionDays: config.auditRetentionDays
+          }
+        );
 
         if (!fs.existsSync(config.templatePath)) {
           logger.warn(
@@ -104,12 +113,21 @@ function createApp(config = createConfig(), overrides = {}) {
               templateFilename: config.templateFilename
             })
           );
-          await recordSubmissionEvent(config.auditFilePath, 'rejected', req.body || {}, {
-            requestId: req.requestId,
-            reason: 'template_missing'
-          });
+          await recordSubmissionEvent(
+            config.auditFilePath,
+            'rejected',
+            req.body || {},
+            {
+              requestId: req.requestId,
+              reason: 'template_missing'
+            },
+            {
+              retentionDays: config.auditRetentionDays
+            }
+          );
 
           return res.status(400).json({
+            requestId: req.requestId,
             error: `Template não encontrado. Coloque o arquivo ${config.templateFilename} em ${config.templateDir}.`
           });
         }
@@ -124,12 +142,21 @@ function createApp(config = createConfig(), overrides = {}) {
               fieldErrors: validationResult.fieldErrors
             })
           );
-          await recordSubmissionEvent(config.auditFilePath, 'rejected', payload, {
-            requestId: req.requestId,
-            reason: validationResult.message
-          });
+          await recordSubmissionEvent(
+            config.auditFilePath,
+            'rejected',
+            payload,
+            {
+              requestId: req.requestId,
+              reason: validationResult.message
+            },
+            {
+              retentionDays: config.auditRetentionDays
+            }
+          );
 
           return res.status(400).json({
+            requestId: req.requestId,
             error: validationResult.message,
             fieldErrors: validationResult.fieldErrors
           });
@@ -138,19 +165,13 @@ function createApp(config = createConfig(), overrides = {}) {
         const fileBuffer = await workbookBuilder(payload, config);
         const filename = outputFilenameBuilder(payload.nome);
 
-        logger.info(
-          'workbook_generated',
-          requestMeta(req, {
-            filename
-          })
-        );
+        logger.info('workbook_generated', requestMeta(req));
 
         await internalEmailSender({ payload, fileBuffer, filename, config });
         logger.info(
           'internal_email_sent',
           requestMeta(req, {
-            emailTo: config.emailDestinationLabel,
-            filename
+            emailTo: config.emailDestinationLabel
           })
         );
 
@@ -162,18 +183,25 @@ function createApp(config = createConfig(), overrides = {}) {
             recipient: maskEmailForDisplay(payload.email || '')
           })
         );
-        await recordSubmissionEvent(config.auditFilePath, 'succeeded', payload, {
-          requestId: req.requestId,
-          filename,
-          emailDeliveryMode: config.emailDeliveryMode,
-          confirmationSent: config.confirmationEnabled && Boolean(payload.email)
-        });
+        await recordSubmissionEvent(
+          config.auditFilePath,
+          'succeeded',
+          payload,
+          {
+            requestId: req.requestId,
+            emailDeliveryMode: config.emailDeliveryMode,
+            confirmationSent: config.confirmationEnabled && Boolean(payload.email)
+          },
+          {
+            retentionDays: config.auditRetentionDays
+          }
+        );
 
         return res.json({
+          requestId: req.requestId,
           success: true,
           message: 'Formulário enviado com sucesso. Os dados foram encaminhados para tratamento interno.',
           emailDestinationLabel: config.emailDestinationLabel,
-          fileName: filename,
           confirmationSent: config.confirmationEnabled && Boolean(payload.email)
         });
       } catch (error) {
@@ -183,12 +211,21 @@ function createApp(config = createConfig(), overrides = {}) {
             message: error.message
           })
         );
-        await recordSubmissionEvent(config.auditFilePath, 'failed', req.body || {}, {
-          requestId: req.requestId,
-          message: error.message
-        });
+        await recordSubmissionEvent(
+          config.auditFilePath,
+          'failed',
+          req.body || {},
+          {
+            requestId: req.requestId,
+            message: error.message
+          },
+          {
+            retentionDays: config.auditRetentionDays
+          }
+        );
 
         return res.status(500).json({
+          requestId: req.requestId,
           error: 'Não foi possível gerar a planilha e enviar os e-mails. Verifique a configuração de envio.'
         });
       }

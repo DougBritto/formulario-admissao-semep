@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { createConfig } = require('../lib/config');
+const { recordSubmissionEvent } = require('../lib/audit');
 const {
   FIELD_MESSAGES,
   isValidCalendarDate,
@@ -25,7 +26,8 @@ function makeConfig(overrides = {}) {
       RESEND_FROM: 'onboarding@resend.dev',
       EMAIL_TO: 'teste@example.com',
       EMAIL_CONFIRMATION_ENABLED: 'true',
-      EMAIL_DELIVERY_MODE: 'simulate'
+      EMAIL_DELIVERY_MODE: 'simulate',
+      AUDIT_RETENTION_DAYS: '30'
     }),
     ...overrides
   };
@@ -47,6 +49,15 @@ function makePayload() {
 function makeAuditFilePath() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'admissoes-audit-'));
   return path.join(dir, 'submission-audit.jsonl');
+}
+
+function readAuditLog(auditFilePath) {
+  return fs
+    .readFileSync(auditFilePath, 'utf8')
+    .trim()
+    .split('\n')
+    .filter(Boolean)
+    .map((line) => JSON.parse(line));
 }
 
 test('accepts a valid payload', () => {
@@ -257,6 +268,32 @@ test('requires dependent dnv for births from february 2010 onward', () => {
   );
 });
 
+test('prunes audit entries older than retention policy', async () => {
+  const auditFilePath = makeAuditFilePath();
+  fs.writeFileSync(
+    auditFilePath,
+    `${JSON.stringify({
+      time: '2020-01-01T00:00:00.000Z',
+      type: 'received',
+      payload: {},
+      meta: {}
+    })}\n`,
+    'utf8'
+  );
+
+  await recordSubmissionEvent(
+    auditFilePath,
+    'received',
+    makePayload(),
+    { requestId: 'req-test' },
+    { retentionDays: 30 }
+  );
+
+  const auditLog = readAuditLog(auditFilePath);
+  assert.equal(auditLog.length, 1);
+  assert.equal(auditLog[0].meta.requestId, 'req-test');
+});
+
 test('GET /health returns runtime status', async () => {
   const config = makeConfig({
     auditFilePath: makeAuditFilePath()
@@ -298,6 +335,7 @@ test('GET /api/config returns runtime configuration', async () => {
     const data = await response.json();
 
     assert.equal(response.status, 200);
+    assert.ok(data.requestId);
     assert.equal(data.maxDependentes, 5);
     assert.equal(data.emailConfigured, true);
     assert.equal(data.emailDestinationLabel, 'te***@example.com');
@@ -343,17 +381,13 @@ test('POST /api/generate returns success with injected services and writes audit
     const data = await response.json();
 
     assert.equal(response.status, 200);
+    assert.ok(data.requestId);
     assert.equal(data.success, true);
-    assert.equal(data.fileName, 'SCA_MARIA_DA_SILVA_2026-03-31.xlsx');
     assert.equal(data.emailDestinationLabel, 'te***@example.com');
     assert.equal(sent.internal, true);
     assert.equal(sent.confirmation, true);
 
-    const auditLog = fs
-      .readFileSync(auditFilePath, 'utf8')
-      .trim()
-      .split('\n')
-      .map((line) => JSON.parse(line));
+    const auditLog = readAuditLog(auditFilePath);
     assert.equal(auditLog.length, 2);
     assert.equal(auditLog[0].type, 'received');
     assert.equal(auditLog[1].type, 'succeeded');
@@ -388,15 +422,12 @@ test('POST /api/generate returns validation error and records rejection', async 
     });
     const data = await response.json();
 
+    assert.ok(data.requestId);
     assert.equal(response.status, 400);
     assert.equal(data.error, 'CPF inválido.');
     assert.equal(data.fieldErrors.cpf, 'CPF inválido.');
 
-    const auditLog = fs
-      .readFileSync(auditFilePath, 'utf8')
-      .trim()
-      .split('\n')
-      .map((line) => JSON.parse(line));
+    const auditLog = readAuditLog(auditFilePath);
     assert.equal(auditLog.length, 2);
     assert.equal(auditLog[0].type, 'received');
     assert.equal(auditLog[1].type, 'rejected');
